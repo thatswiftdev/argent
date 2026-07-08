@@ -85,6 +85,8 @@ import { awaitUserSelectionTool } from "../tools/variants/await-user-selection";
 import { chromiumTabsTool } from "../tools/chromium-tabs";
 import { chromiumCookiesTool } from "../tools/chromium-cookies";
 import { chromiumStorageTool } from "../tools/chromium-storage";
+import { createStartVideoRecordingTool } from "../tools/video-recording/start";
+import { createStopVideoRecordingTool } from "../tools/video-recording/stop";
 
 export function createRegistry(): Registry {
   // Inject the real feature-flag check so the gate is enforced for EVERY
@@ -114,6 +116,8 @@ export function createRegistry(): Registry {
   registry.registerTool(openUrlTool);
   registry.registerTool(createScreenshotTool(registry));
   registry.registerTool(screenshotDiffTool);
+  registry.registerTool(createStartVideoRecordingTool(registry));
+  registry.registerTool(createStopVideoRecordingTool(registry));
   registry.registerTool(gestureTapTool);
   registry.registerTool(chromiumTabsTool);
   registry.registerTool(chromiumCookiesTool);
