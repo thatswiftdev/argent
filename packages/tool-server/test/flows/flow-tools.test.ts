@@ -292,6 +292,133 @@ describe("flow-add-step", () => {
     expect(flow.steps).toEqual([]);
   });
 
+  it("does not record when find returns found:false", async () => {
+    const registry = createMockRegistry({
+      find: { result: { found: false, note: 'no element matched text="Login"' } },
+    });
+    const tool = createFlowAddStepTool(registry);
+
+    await flowStartRecordingTool.execute(
+      {},
+      { name: "find-miss-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
+    );
+
+    await expect(
+      tool.execute({}, { command: "find", args: '{"query":"Login","by":"text","action":"tap"}' })
+    ).rejects.toThrow(/find did not locate an element.*Login/i);
+
+    const content = await readFlowFile("find-miss-recording");
+    const flow = parseFlow(content);
+    expect(flow.steps).toEqual([]);
+  });
+
+  it("does not record when an await-ui-element step's condition is not met (L6)", async () => {
+    // An unmet await-ui-element returns { success: false } instead of throwing.
+    // Recording it would bake a step that flow-run halts on for EVERY replay
+    // (flow-run stops on isUnmetUiWaitResult), so flow-add-step must reject it at
+    // record time — symmetric with the missed-find guard above.
+    const registry = createMockRegistry({
+      "await-ui-element": {
+        result: { success: false, elapsed: 5000, note: "no element matched the selector" },
+      },
+    });
+    const tool = createFlowAddStepTool(registry);
+
+    await flowStartRecordingTool.execute(
+      {},
+      { name: "wait-miss-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
+    );
+
+    await expect(
+      tool.execute(
+        {},
+        {
+          command: "await-ui-element",
+          args: '{"condition":"visible","selector":{"text":"Continue"}}',
+        }
+      )
+    ).rejects.toThrow(/await-ui-element condition was not met.*selector/i);
+
+    const content = await readFlowFile("wait-miss-recording");
+    const flow = parseFlow(content);
+    expect(flow.steps).toEqual([]);
+  });
+
+  it("records a met await-ui-element step (success:true is a normal recordable step)", async () => {
+    const registry = createMockRegistry({
+      "await-ui-element": { result: { success: true, elapsed: 120 } },
+    });
+    const tool = createFlowAddStepTool(registry);
+
+    await flowStartRecordingTool.execute(
+      {},
+      { name: "wait-hit-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
+    );
+
+    const result = await tool.execute(
+      {},
+      {
+        command: "await-ui-element",
+        args: '{"condition":"visible","selector":{"text":"Continue"}}',
+      }
+    );
+    expect(result.toolResult).toMatchObject({ success: true });
+    const flow = parseFlow(result.flowFile);
+    expect(flow.steps).toHaveLength(1);
+    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "await-ui-element" });
+  });
+
+  it("records find steps when the element is found", async () => {
+    const registry = createMockRegistry({
+      find: { result: { found: true, matchCount: 1 } },
+    });
+    const tool = createFlowAddStepTool(registry);
+
+    await flowStartRecordingTool.execute(
+      {},
+      { name: "find-hit-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
+    );
+
+    const result = await tool.execute(
+      {},
+      { command: "find", args: '{"query":"Login","by":"text","action":"tap"}' }
+    );
+
+    expect(result.toolResult).toEqual({ found: true, matchCount: 1 });
+    const flow = parseFlow(result.flowFile);
+    expect(flow.steps).toEqual([
+      {
+        kind: "tool",
+        name: "find",
+        args: { query: "Login", by: "text", action: "tap" },
+      },
+    ]);
+  });
+
+  it("records an `exists` find that returns found:false (a valid absent answer, not a miss)", async () => {
+    const registry = createMockRegistry({
+      find: { result: { found: false, action: "exists", matchCount: 0 } },
+    });
+    const tool = createFlowAddStepTool(registry);
+
+    await flowStartRecordingTool.execute(
+      {},
+      { name: "exists-false-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
+    );
+
+    // Must NOT throw: for `exists`, found:false is the successful "not present"
+    // result, so the step is recorded rather than aborting the recording.
+    const result = await tool.execute(
+      {},
+      { command: "find", args: '{"query":"Spinner","by":"text","action":"exists"}' }
+    );
+    expect(result.toolResult).toMatchObject({ found: false, action: "exists" });
+    const flow = parseFlow(result.flowFile);
+    expect(flow.steps).toEqual([
+      { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } },
+    ]);
+  });
+
   it("handles omitted args", async () => {
     const registry = createMockRegistry({
       screenshot: { result: { url: "http://..." } },
@@ -579,6 +706,75 @@ describe("flow-execute", () => {
       tool: "tap",
       error: expect.stringContaining("failed"),
     });
+  });
+
+  it("stops when a recorded find step returns found:false", async () => {
+    const registry = createMockRegistry({
+      find: { result: { found: false, note: 'no element matched text="Continue"' } },
+      tap: { result: { tapped: true } },
+    });
+    const runFlow = createRunFlowTool(registry);
+
+    const dir = path.join(tmpDir, ".argent", "flows");
+    await fs.mkdir(dir, { recursive: true });
+    const content = serializeFlow({
+      executionPrerequisite: "",
+      steps: [
+        { kind: "tool", name: "find", args: { query: "Continue", by: "text", action: "tap" } },
+        { kind: "tool", name: "tap", args: { x: 0.5 } },
+      ],
+    });
+    await fs.writeFile(path.join(dir, "find-miss-replay.yaml"), content);
+
+    const result = await runFlow.execute({}, { name: "find-miss-replay", project_root: tmpDir });
+    assertFlowRunResult(result);
+
+    expect(registry.invokeTool).toHaveBeenCalledTimes(1);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]).toMatchObject({
+      kind: "tool",
+      tool: "find",
+      error: expect.stringMatching(/find did not locate an element.*Continue/i),
+    });
+  });
+
+  it("does NOT stop the flow when a recorded `exists` find returns found:false (a valid absent answer)", async () => {
+    // Mirror of the record-side test ("records an `exists` find that returns
+    // found:false"): on replay, `exists` reporting found:false is a successful
+    // "not present" answer, not a missed locate — isMissedFindResult exempts it,
+    // so the step is recorded normally and the flow continues to the next step.
+    // Guards against a regression that drops the `r.action === "exists"` check in
+    // flow-step-results.ts, which would abort replay of every recorded exists step.
+    const registry = createMockRegistry({
+      find: { result: { found: false, action: "exists", matchCount: 0 } },
+      tap: { result: { tapped: true } },
+    });
+    const runFlow = createRunFlowTool(registry);
+
+    const dir = path.join(tmpDir, ".argent", "flows");
+    await fs.mkdir(dir, { recursive: true });
+    const content = serializeFlow({
+      executionPrerequisite: "",
+      steps: [
+        { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } },
+        { kind: "tool", name: "tap", args: { x: 0.5 } },
+      ],
+    });
+    await fs.writeFile(path.join(dir, "exists-false-replay.yaml"), content);
+
+    const result = await runFlow.execute({}, { name: "exists-false-replay", project_root: tmpDir });
+    assertFlowRunResult(result);
+
+    // Both steps run: the exists step is NOT an error, and the following tap fires.
+    expect(registry.invokeTool).toHaveBeenCalledTimes(2);
+    expect(result.steps).toHaveLength(2);
+    expect(result.steps[0]).toMatchObject({
+      kind: "tool",
+      tool: "find",
+      result: { found: false, action: "exists" },
+    });
+    expect(result.steps[0]).not.toHaveProperty("error");
+    expect(result.steps[1]).toMatchObject({ kind: "tool", tool: "tap", result: { tapped: true } });
   });
 
   it("throws when flow file does not exist", async () => {

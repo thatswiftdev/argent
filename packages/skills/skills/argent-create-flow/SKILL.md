@@ -12,7 +12,7 @@ A flow is a recorded sequence of MCP tool calls saved to a `.yaml` file in the `
 | Tool                     | Purpose                                                                    |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `flow-start-recording`   | Start recording — takes a name and executionPrerequisite, creates the file |
-| `flow-add-step`          | Execute a tool call live and record it if it succeeds                      |
+| `flow-add-step`          | Execute a tool call live and record it when the call succeeds              |
 | `flow-add-echo`          | Add a label/comment that prints during replay                              |
 | `flow-finish-recording`  | Stop recording and get a summary                                           |
 | `flow-read-prerequisite` | Read a flow's execution prerequisite without running it                    |

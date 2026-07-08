@@ -37,7 +37,7 @@ If argent is ABSENT, treat it as an expected state, not an error to retry. Do no
 
 <tapping_rule>
 <important>**Never** derive tap coordinates from a screenshot</important>
-Before **every** tap, you MUST call a discovery tool and extract coordinates from the result. This is not optional. Preferred tools are, in order:
+Before **every** coordinate tap, you MUST call a discovery tool and extract coordinates from the result. This is not optional. Preferred tools are, in order:
 
 - `describe` - native app-level components and safely targetable foreground apps (iOS and Android).
 - `native-describe-screen` - accessibility screen description via injected native devtools (iOS only)
@@ -45,7 +45,12 @@ Before **every** tap, you MUST call a discovery tool and extract coordinates fro
 
 `native-user-interactable-view-at-point` / `native-view-at-point` are follow-up diagnostics once you already have a candidate point (iOS only).
 
-Whenever something changed YOU MUST first call `describe`, or another appropriate discovery tool so you do not hallucinate element positions. Do not guess coordinates if you can use discovery tool. Do not tap if you have not called a discovery tool in the current step. Screenshots alone are never sufficient for coordinates.
+Choose exactly one tap path for a target:
+
+- Unknown screen/layout or ambiguous target: `describe` / `native-describe-screen` / `debugger-component-tree` -> `gesture-tap` using the returned frame or tap point.
+- Known visible target by text/label/value/role/id and no current coordinates for it: `find` can locate and act in one call.
+- Recent discovery already exposed the same target frame/tap point: do **not** call `find` for that target; use `gesture-tap`.
+- UI changed after discovery (navigation, modal, list update, keyboard, animation, reload): the old coordinates are stale. Re-discover, or use `find` if the next target is known by text/label/id.
 
 If a **tap fails twice** at the same coordinates, **stop retrying**. Re-run the discovery tool.
 
@@ -73,7 +78,7 @@ Decision order:
 - All simulator/emulator interactions go through argent MCP tools — never use `xcrun simctl`,
   raw `curl` to simulator ports, or the simulator-server binary directly.
 - Before calling any gesture tool for the first time, use ToolSearch to load its schema.
-- Interaction tools (`gesture-tap`, `gesture-swipe`, `gesture-pinch`, `gesture-rotate`, `gesture-custom`, `launch-app`, etc.) return a screenshot automatically.
+- Interaction tools (`find`, `gesture-tap`, `gesture-swipe`, `gesture-pinch`, `gesture-rotate`, `gesture-custom`, `launch-app`, etc.) return a screenshot automatically.
   Call `screenshot` separately only for a baseline before any action or after a delay.
 - Always open apps with `launch-app` or `open-url` — never tap home screen icons.
 - Always use `run-sequence` when performing multiple sequential device actions where you don't need to observe the screen between steps. More in `argent-device-interact` skill.

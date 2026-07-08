@@ -21,6 +21,15 @@ const ALLOWED_TOOLS = new Set([
   // `keyboard` types into the focused field there.
   "tv-remote",
   AWAIT_UI_ELEMENT_TOOL_ID,
+  // `find` is deliberately NOT allowed under the current run-sequence semantics.
+  // A missed `find` returns { found: false } WITHOUT throwing — but so does an
+  // unmet await-ui-element (it returns { success: false }); the difference is not
+  // "throws vs doesn't". The reason is that run-sequence's stop-on-failure guard
+  // only recognises an unmet await-ui-element wait (`isUnmetUiWaitResult`), not a
+  // missed find (`isMissedFindResult` lives in the flow runners, not here). So a
+  // `find … tap` that located nothing would silently let the sequence continue
+  // past it. Wiring find in would mean teaching the guard below about
+  // `isMissedFindResult` too — until then, use individual `find` calls instead.
 ]);
 
 const zodSchema = z.object({
