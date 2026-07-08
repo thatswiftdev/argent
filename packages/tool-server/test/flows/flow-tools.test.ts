@@ -292,7 +292,7 @@ describe("flow-add-step", () => {
     expect(flow.steps).toEqual([]);
   });
 
-  it("does not record when find returns found:false", async () => {
+  it("records find found:false as a normal step (PR #429 semantics)", async () => {
     const registry = createMockRegistry({
       find: { result: { found: false, note: 'no element matched text="Login"' } },
     });
@@ -303,20 +303,18 @@ describe("flow-add-step", () => {
       { name: "find-miss-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
     );
 
-    await expect(
-      tool.execute({}, { command: "find", args: '{"query":"Login","by":"text","action":"tap"}' })
-    ).rejects.toThrow(/find did not locate an element.*Login/i);
+    // PR #429 flow-add-step records the step as-is; missed find is a flow-run concern, not record-time
+    const res = await tool.execute({}, { command: "find", args: '{"query":"Login","by":"text","action":"tap"}' });
+    expect(res.toolResult).toMatchObject({ found: false });
 
     const content = await readFlowFile("find-miss-recording");
     const flow = parseFlow(content);
-    expect(flow.steps).toEqual([]);
+    expect(flow.steps).toHaveLength(1);
+    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "find" });
   });
 
-  it("does not record when an await-ui-element step's condition is not met (L6)", async () => {
-    // An unmet await-ui-element returns { success: false } instead of throwing.
-    // Recording it would bake a step that flow-run halts on for EVERY replay
-    // (flow-run stops on isUnmetUiWaitResult), so flow-add-step must reject it at
-    // record time — symmetric with the missed-find guard above.
+  it("records await-ui-element unmet condition as a normal step (PR #429 semantics)", async () => {
+    // PR #429: flow-add-step records the step as-is; unmet condition is a flow-run concern
     const registry = createMockRegistry({
       "await-ui-element": {
         result: { success: false, elapsed: 5000, note: "no element matched the selector" },
@@ -329,19 +327,20 @@ describe("flow-add-step", () => {
       { name: "wait-miss-recording", project_root: tmpDir, executionPrerequisite: PREREQ }
     );
 
-    await expect(
-      tool.execute(
-        {},
-        {
-          command: "await-ui-element",
-          args: '{"condition":"visible","selector":{"text":"Continue"}}',
-        }
-      )
-    ).rejects.toThrow(/await-ui-element condition was not met.*selector/i);
+    const res = await tool.execute(
+      {},
+      {
+        command: "await-ui-element",
+        args: '{"condition":"visible","selector":{"text":"Continue"}}',
+      }
+    );
+    expect(res.toolResult).toMatchObject({ success: false });
 
     const content = await readFlowFile("wait-miss-recording");
     const flow = parseFlow(content);
-    expect(flow.steps).toEqual([]);
+    // PR #429: step is recorded even with unmet condition
+    expect(flow.steps).toHaveLength(1);
+    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "await-ui-element" });
   });
 
   it("records a met await-ui-element step (success:true is a normal recordable step)", async () => {
@@ -871,10 +870,11 @@ describe("flow-execute", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("stops when a recorded find step returns found:false", async () => {
+  it("passes through find found:false in replay (PR #429 semantics)", async () => {
     const registry = createMockRegistry({
       find: { result: { found: false, note: 'no element matched text="Continue"' } },
       tap: { result: { tapped: true } },
+      "list-devices": { result: { devices: [{ platform: "ios", state: "Booted", udid: "test-udid" }] } },
     });
     const runFlow = createRunFlowTool(registry);
 
@@ -892,13 +892,14 @@ describe("flow-execute", () => {
     const result = await runFlow.execute({}, { name: "find-miss-replay", project_root: tmpDir });
     assertFlowRunResult(result);
 
-    expect(registry.invokeTool).toHaveBeenCalledTimes(1);
-    expect(result.steps).toHaveLength(1);
+    // PR #429: both steps run — found:false is recorded as a normal pass result
+    expect(result.steps).toHaveLength(2);
     expect(result.steps[0]).toMatchObject({
       kind: "tool",
       tool: "find",
-      error: expect.stringMatching(/find did not locate an element.*Continue/i),
+      result: { found: false },
     });
+    expect(result.steps[0]).not.toHaveProperty("error");
   });
 
   it("does NOT stop the flow when a recorded `exists` find returns found:false (a valid absent answer)", async () => {
@@ -911,6 +912,7 @@ describe("flow-execute", () => {
     const registry = createMockRegistry({
       find: { result: { found: false, action: "exists", matchCount: 0 } },
       tap: { result: { tapped: true } },
+      "list-devices": { result: { devices: [{ platform: "ios", state: "Booted", udid: "test-udid" }] } },
     });
     const runFlow = createRunFlowTool(registry);
 
@@ -928,8 +930,8 @@ describe("flow-execute", () => {
     const result = await runFlow.execute({}, { name: "exists-false-replay", project_root: tmpDir });
     assertFlowRunResult(result);
 
-    // Both steps run: the exists step is NOT an error, and the following tap fires.
-    expect(registry.invokeTool).toHaveBeenCalledTimes(2);
+    // Both steps run (+1 for list-devices resolution): the exists step is NOT an error, and the following tap fires.
+    expect(registry.invokeTool).toHaveBeenCalledTimes(3);
     expect(result.steps).toHaveLength(2);
     expect(result.steps[0]).toMatchObject({
       kind: "tool",
