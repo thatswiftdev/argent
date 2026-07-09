@@ -88,7 +88,7 @@ describe("hidden timeout diagnostics", () => {
 
     await writeFlow("blank-hidden", {
       executionPrerequisite: "",
-      steps: [{ kind: "assert", condition: "hidden", selector: { identifier: "spinner" } }],
+      steps: [{ step: { kind: "assert", condition: "hidden", selector: { identifier: "spinner" } } }],
     });
 
     const result = await run("blank-hidden");
@@ -109,7 +109,7 @@ describe("hidden timeout diagnostics", () => {
 
     await writeFlow("stuck-spinner", {
       executionPrerequisite: "",
-      steps: [{ kind: "assert", condition: "hidden", selector: { identifier: "spinner" } }],
+      steps: [{ step: { kind: "assert", condition: "hidden", selector: { identifier: "spinner" } } }],
     });
 
     const result = await run("stuck-spinner");

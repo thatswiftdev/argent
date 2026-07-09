@@ -20,6 +20,7 @@ import {
   setActiveProjectRoot,
   type FlowFile,
   type FlowStep,
+  type FlowStepWithOptional,
   type Launch,
 } from "./flow-utils";
 import { sleepOrAbort } from "../../utils/timing";
@@ -146,8 +147,10 @@ const POST_LAUNCH_SETTLE_MS = 1500;
  * start would fail the first directive with a raw tree-source error; gating
  * the launch step reports the problem where it belongs, with a relaunch hint.
  */
-const NATIVE_READY_TIMEOUT_MS = 8000;
+const NATIVE_READY_TIMEOUT_MS = 20_000;
 const NATIVE_READY_POLL_MS = 250;
+/** Max restart attempts (initial + retries) before giving up on native devtools. */
+const LAUNCH_MAX_RETRIES = 2;
 
 /**
  * Poll until native-devtools is connected for `bundleId`. Returns true once
@@ -317,15 +320,30 @@ async function runLaunch(state: ExecState, app: Launch): Promise<{ ok: boolean; 
       reason: `no app id declared for platform "${device.platform}" — add a launch entry for it`,
     };
   }
-  try {
-    await invokeOnDevice(state, "restart-app", { bundleId });
-  } catch (err) {
-    return { ok: false, reason: `restart-app failed: ${errMsg(err)}` };
+
+  // Retry restart-app + native devtools connection. A cold start on a large app
+  // may not expose the injected dylib's connection within a single window — the
+  // dylib attaches asynchronously, and a second launch after a clean terminate
+  // gives it a fresh process to inject into. Each attempt settles, then polls
+  // the native-devtools connection up to NATIVE_READY_TIMEOUT_MS.
+  let lastReason: string | undefined;
+  for (let attempt = 0; attempt <= LAUNCH_MAX_RETRIES; attempt++) {
+    if (signal?.aborted) return { ok: false, reason: "run aborted during launch" };
+    try {
+      await invokeOnDevice(state, "restart-app", { bundleId });
+    } catch (err) {
+      lastReason = `restart-app failed: ${errMsg(err)}`;
+      continue;
+    }
+    await sleepOrAbort(POST_LAUNCH_SETTLE_MS, signal);
+    const gate = await treeSourceGate(registry, device, bundleId, signal);
+    if (!gate) {
+      state.bundleId = bundleId;
+      return { ok: true };
+    }
+    lastReason = gate;
   }
-  await sleepOrAbort(POST_LAUNCH_SETTLE_MS, signal);
-  const gate = await treeSourceGate(registry, device, bundleId, signal);
-  if (gate) return { ok: false, reason: gate };
-  return { ok: true };
+  return { ok: false, reason: lastReason ?? "native devtools did not connect" };
 }
 
 interface ExecState extends ActionEnv {
@@ -476,10 +494,10 @@ function chromiumBootSpec(
   platform: string | undefined
 ): { path: string; args?: string[] } | null {
   if (!isE2eFlow(flow)) return null;
-  const first = flow.steps.find((s) => s.kind !== "echo");
-  if (!first || first.kind !== "launch") return null;
-  if (launchTargetPlatform(first.app, platform) !== "chromium") return null;
-  return chromiumLaunchSpec(first.app);
+  const first = flow.steps.find((s) => s.step.kind !== "echo");
+  if (!first || first.step.kind !== "launch") return null;
+  if (launchTargetPlatform(first.step.app, platform) !== "chromium") return null;
+  return chromiumLaunchSpec(first.step.app);
 }
 
 /**
@@ -578,12 +596,14 @@ function summarize(
 /** Execute a list of steps, appending reports to state. Honors hard-stop + abort. */
 async function execSteps(
   state: ExecState,
-  steps: FlowStep[],
+  steps: FlowStepWithOptional[],
   sourceFlow: string,
   runStack: string[]
 ): Promise<void> {
-  for (const step of steps) {
+  for (const entry of steps) {
     const index = state.reports.length;
+    const step = entry.step;
+    const optional = entry.optional === true && step.kind !== "launch";
 
     if (state.stopped) {
       state.reports.push({ index, kind: step.kind, status: "skip", flow: sourceFlow });
@@ -607,6 +627,12 @@ async function execSteps(
     }
 
     const report = await execLeafStep(state, step, index, sourceFlow);
+    // An optional step that fails or errors is downgraded to skip — the run
+    // continues. launch steps ignore optional (handled by the guard above).
+    if ((report.status === "fail" || report.status === "error") && optional) {
+      state.reports.push({ ...report, status: "skip", reason: `${report.reason ?? "step failed"} (optional — flow continues)` });
+      continue;
+    }
     state.reports.push(report);
     if (report.status === "fail" || report.status === "error") state.stopped = true;
   }

@@ -155,7 +155,7 @@ describe("flow-start-recording edge cases", () => {
     // second-flow should have the echo
     const secondContent = await readFlowFile("second-flow");
     const secondFlow = parseFlow(secondContent);
-    expect(secondFlow.steps).toEqual([{ kind: "echo", message: "goes to second" }]);
+    expect(secondFlow.steps).toEqual([{ step: { kind: "echo", message: "goes to second" } }]);
   });
 
   it("restarting the same flow does not report a switch", async () => {
@@ -199,7 +199,7 @@ describe("flow-add-echo", () => {
 
     expect(result.message).toContain("echo-test");
     const flow = parseFlow(result.flowFile);
-    expect(flow.steps).toEqual([{ kind: "echo", message: "Hello world" }]);
+    expect(flow.steps).toEqual([{ step: { kind: "echo", message: "Hello world" } }]);
   });
 
   it("appends multiple echo entries", async () => {
@@ -212,8 +212,8 @@ describe("flow-add-echo", () => {
 
     const flow = parseFlow(result.flowFile);
     expect(flow.steps).toEqual([
-      { kind: "echo", message: "First" },
-      { kind: "echo", message: "Second" },
+      { step: { kind: "echo", message: "First" } },
+      { step: { kind: "echo", message: "Second" } },
     ]);
   });
 
@@ -241,7 +241,7 @@ describe("flow-add-step", () => {
 
     expect(result.toolResult).toEqual({ tapped: true });
     const flow = parseFlow(result.flowFile);
-    expect(flow.steps).toEqual([{ kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } } }]);
     expect(registry.invokeTool).toHaveBeenCalledWith("tap", {
       x: 0.5,
       y: 0.3,
@@ -310,7 +310,7 @@ describe("flow-add-step", () => {
     const content = await readFlowFile("find-miss-recording");
     const flow = parseFlow(content);
     expect(flow.steps).toHaveLength(1);
-    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "find" });
+    expect(flow.steps[0].step).toMatchObject({ kind: "tool", name: "find" });
   });
 
   it("records await-ui-element unmet condition as a normal step (PR #429 semantics)", async () => {
@@ -340,7 +340,7 @@ describe("flow-add-step", () => {
     const flow = parseFlow(content);
     // PR #429: step is recorded even with unmet condition
     expect(flow.steps).toHaveLength(1);
-    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "await-ui-element" });
+    expect(flow.steps[0].step).toMatchObject({ kind: "tool", name: "await-ui-element" });
   });
 
   it("records a met await-ui-element step (success:true is a normal recordable step)", async () => {
@@ -364,7 +364,7 @@ describe("flow-add-step", () => {
     expect(result.toolResult).toMatchObject({ success: true });
     const flow = parseFlow(result.flowFile);
     expect(flow.steps).toHaveLength(1);
-    expect(flow.steps[0]).toMatchObject({ kind: "tool", name: "await-ui-element" });
+    expect(flow.steps[0].step).toMatchObject({ kind: "tool", name: "await-ui-element" });
   });
 
   it("records find steps when the element is found", async () => {
@@ -386,11 +386,11 @@ describe("flow-add-step", () => {
     expect(result.toolResult).toEqual({ found: true, matchCount: 1 });
     const flow = parseFlow(result.flowFile);
     expect(flow.steps).toEqual([
-      {
+      { step: {
         kind: "tool",
         name: "find",
         args: { query: "Login", by: "text", action: "tap" },
-      },
+      } },
     ]);
   });
 
@@ -414,7 +414,7 @@ describe("flow-add-step", () => {
     expect(result.toolResult).toMatchObject({ found: false, action: "exists" });
     const flow = parseFlow(result.flowFile);
     expect(flow.steps).toEqual([
-      { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } },
+      { step: { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } } },
     ]);
   });
 
@@ -432,7 +432,7 @@ describe("flow-add-step", () => {
 
     const content = await readFlowFile("no-args");
     const flow = parseFlow(content);
-    expect(flow.steps).toEqual([{ kind: "tool", name: "screenshot", args: {} }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tool", name: "screenshot", args: {} } }]);
     expect(registry.invokeTool).toHaveBeenCalledWith("screenshot", {});
   });
 
@@ -465,7 +465,7 @@ describe("flow-add-step", () => {
       bundleId: "com.acme.app",
     });
     // …but recorded the launch directive, making this an e2e flow.
-    expect(parseFlow(result.flowFile).steps).toEqual([{ kind: "launch", app: "com.acme.app" }]);
+    expect(parseFlow(result.flowFile).steps).toEqual([{ step: { kind: "launch", app: "com.acme.app" } }]);
   });
 
   it("keeps a restart-app with extra args (e.g. activity) as a raw tool step", async () => {
@@ -484,11 +484,11 @@ describe("flow-add-step", () => {
     );
 
     expect(parseFlow(result.flowFile).steps).toEqual([
-      {
+      { step: {
         kind: "tool",
         name: "restart-app",
         args: { bundleId: "com.acme.app", activity: ".Main" },
-      },
+      } },
     ]);
   });
 
@@ -541,7 +541,7 @@ describe("flow-add-step", () => {
     // Ran the fragment live to set up state…
     expect(result.toolResult).toEqual({ ok: true, steps: [] });
     // …but recorded the portable composition directive, not the raw tool call.
-    expect(parseFlow(result.flowFile).steps).toEqual([{ kind: "run", flow: "login" }]);
+    expect(parseFlow(result.flowFile).steps).toEqual([{ step: { kind: "run", flow: "login" } }]);
   });
 
   it("keeps the raw flow-execute step when the target is an e2e flow", async () => {
@@ -566,11 +566,11 @@ describe("flow-add-step", () => {
     // udid/device_id key, so it survives stripping) — exactly the
     // non-portability that the run: rewrite avoids.
     expect(parseFlow(result.flowFile).steps).toEqual([
-      {
+      { step: {
         kind: "tool",
         name: "flow-execute",
         args: { name: "other-e2e", project_root: tmpDir, device: "ABC" },
-      },
+      } },
     ]);
   });
 
@@ -592,7 +592,7 @@ describe("flow-add-step", () => {
 
     expect(result.message).toMatch(/could not resolve/i);
     expect(parseFlow(result.flowFile).steps).toEqual([
-      { kind: "tool", name: "flow-execute", args: { name: "elsewhere", project_root: tmpDir } },
+      { step: { kind: "tool", name: "flow-execute", args: { name: "elsewhere", project_root: tmpDir } } },
     ]);
   });
 
@@ -799,9 +799,9 @@ describe("flow-execute", () => {
       serializeFlow({
         executionPrerequisite: "",
         steps: [
-          { kind: "tool", name: "tap", args: { x: 0.5 } },
-          { kind: "echo", message: "between" },
-          { kind: "tool", name: "swipe", args: { direction: "up" } },
+          { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
+          { step: { kind: "echo", message: "between" } },
+          { step: { kind: "tool", name: "swipe", args: { direction: "up" } } },
         ],
       })
     );
@@ -846,8 +846,8 @@ describe("flow-execute", () => {
     const content = serializeFlow({
       executionPrerequisite: "",
       steps: [
-        { kind: "tool", name: "tap", args: { x: 0.5 } },
-        { kind: "echo", message: "Should not reach" },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
+        { step: { kind: "echo", message: "Should not reach" } },
       ],
     });
     await fs.writeFile(path.join(dir, "error-test.yaml"), content);
@@ -883,8 +883,8 @@ describe("flow-execute", () => {
     const content = serializeFlow({
       executionPrerequisite: "",
       steps: [
-        { kind: "tool", name: "find", args: { query: "Continue", by: "text", action: "tap" } },
-        { kind: "tool", name: "tap", args: { x: 0.5 } },
+        { step: { kind: "tool", name: "find", args: { query: "Continue", by: "text", action: "tap" } } },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
       ],
     });
     await fs.writeFile(path.join(dir, "find-miss-replay.yaml"), content);
@@ -921,8 +921,8 @@ describe("flow-execute", () => {
     const content = serializeFlow({
       executionPrerequisite: "",
       steps: [
-        { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } },
-        { kind: "tool", name: "tap", args: { x: 0.5 } },
+        { step: { kind: "tool", name: "find", args: { query: "Spinner", by: "text", action: "exists" } } },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
       ],
     });
     await fs.writeFile(path.join(dir, "exists-false-replay.yaml"), content);
@@ -964,7 +964,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "Ready",
-      steps: [{ kind: "tool", name: "screenshot", args: { udid: "A" } }],
+      steps: [{ step: { kind: "tool", name: "screenshot", args: { udid: "A" } } }],
     });
     await fs.writeFile(path.join(dir, "hint-test.yaml"), content);
 
@@ -988,7 +988,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "App freshly reloaded",
-      steps: [{ kind: "echo", message: "Start" }],
+      steps: [{ step: { kind: "echo", message: "Start" } }],
     });
     await fs.writeFile(path.join(dir, "prereq-test.yaml"), content);
 
@@ -1008,7 +1008,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "Device unlocked",
-      steps: [{ kind: "echo", message: "Hello" }],
+      steps: [{ step: { kind: "echo", message: "Hello" } }],
     });
     await fs.writeFile(path.join(dir, "gated.yaml"), content);
 
@@ -1033,7 +1033,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "Device unlocked",
-      steps: [{ kind: "tool", name: "tap", args: { x: 0.5 } }],
+      steps: [{ step: { kind: "tool", name: "tap", args: { x: 0.5 } } }],
     });
     await fs.writeFile(path.join(dir, "ack-test.yaml"), content);
 
@@ -1057,7 +1057,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "",
-      steps: [{ kind: "tool", name: "tap", args: { x: 0.5 } }],
+      steps: [{ step: { kind: "tool", name: "tap", args: { x: 0.5 } } }],
     });
     await fs.writeFile(path.join(dir, "no-gate.yaml"), content);
 
@@ -1079,7 +1079,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "App on settings page",
-      steps: [{ kind: "echo", message: "Hello" }],
+      steps: [{ step: { kind: "echo", message: "Hello" } }],
     });
     await fs.writeFile(path.join(dir, "explicit-false.yaml"), content);
 
@@ -1127,9 +1127,9 @@ describe("flow-execute", () => {
     const content = serializeFlow({
       executionPrerequisite: "",
       steps: [
-        { kind: "echo", message: "First" },
-        { kind: "echo", message: "Second" },
-        { kind: "echo", message: "Third" },
+        { step: { kind: "echo", message: "First" } },
+        { step: { kind: "echo", message: "Second" } },
+        { step: { kind: "echo", message: "Third" } },
       ],
     });
     await fs.writeFile(path.join(dir, "echo-only.yaml"), content);
@@ -1162,10 +1162,10 @@ describe("flow-execute", () => {
     const content = serializeFlow({
       executionPrerequisite: "",
       steps: [
-        { kind: "echo", message: "Start" },
-        { kind: "tool", name: "tap", args: { x: 0.5 } },
-        { kind: "tool", name: "swipe", args: { direction: "up" } },
-        { kind: "echo", message: "Should not reach" },
+        { step: { kind: "echo", message: "Start" } },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
+        { step: { kind: "tool", name: "swipe", args: { direction: "up" } } },
+        { step: { kind: "echo", message: "Should not reach" } },
       ],
     });
     await fs.writeFile(path.join(dir, "mid-error.yaml"), content);
@@ -1209,7 +1209,7 @@ describe("flow-execute", () => {
       path.join(dir, "pre-delay.yaml"),
       serializeFlow({
         executionPrerequisite: "",
-        steps: [{ kind: "tool", name: "tap", args: { x: 0.5 }, delayMs }],
+        steps: [{ step: { kind: "tool", name: "tap", args: { x: 0.5 }, delayMs } }],
       })
     );
     const start = Date.now();
@@ -1228,7 +1228,7 @@ describe("flow-execute", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "",
-      steps: [{ kind: "tool", name: "tap", args: { x: 0.1 } }],
+      steps: [{ step: { kind: "tool", name: "tap", args: { x: 0.1 } } }],
     });
     await fs.writeFile(path.join(dir, "side-effect.yaml"), content);
 
@@ -1255,7 +1255,7 @@ describe("flow-read-prerequisite", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "App on home screen",
-      steps: [{ kind: "echo", message: "Step 1" }],
+      steps: [{ step: { kind: "echo", message: "Step 1" } }],
     });
     await fs.writeFile(path.join(dir, "read-test.yaml"), content);
 
@@ -1273,7 +1273,7 @@ describe("flow-read-prerequisite", () => {
     await fs.mkdir(dir, { recursive: true });
     const content = serializeFlow({
       executionPrerequisite: "",
-      steps: [{ kind: "echo", message: "Hello" }],
+      steps: [{ step: { kind: "echo", message: "Hello" } }],
     });
     await fs.writeFile(path.join(dir, "empty-prereq.yaml"), content);
 

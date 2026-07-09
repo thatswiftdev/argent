@@ -93,7 +93,7 @@ describe("type directive focus wait", () => {
 
     await writeFlow("login", {
       executionPrerequisite: "",
-      steps: [{ kind: "type", into: { identifier: "email" }, text: "a@b.com" }],
+      steps: [{ step: { kind: "type", into: { identifier: "email" }, text: "a@b.com" } }],
     });
 
     const result = asRun(
@@ -141,7 +141,7 @@ describe("type directive focus wait", () => {
 
     await writeFlow("ax-login", {
       executionPrerequisite: "",
-      steps: [{ kind: "type", into: { text: "Email" }, text: "a@b.com", submit: false }],
+      steps: [{ step: { kind: "type", into: { text: "Email" }, text: "a@b.com", submit: false } }],
     });
 
     const result = asRun(

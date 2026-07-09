@@ -35,11 +35,43 @@ const capability: ToolCapability = {
   appleRemote: { simulator: true },
 };
 
-/** Wait for the recording process to exit and the file to finalize (moov atom). */
+/**
+ * Scan a file for the `moov` atom marker. simctl writes it only on graceful
+ * SIGINT exit — without it the MP4 is unplayable (has ftyp + mdat but no index).
+ * Returns true when found.
+ */
+async function hasMoovAtom(filePath: string): Promise<boolean> {
+  const { open } = await import("node:fs/promises");
+  try {
+    const fh = await open(filePath, "r");
+    try {
+      // The moov atom can be at the end of the file (simctl writes it last).
+      // Read the last 64KB — enough for typical moov without scanning the whole file.
+      const { stat } = await import("node:fs/promises");
+      const st = await stat(filePath);
+      if (st.size < 8) return false;
+
+      const tailSize = Math.min(65536, st.size);
+      const buf = Buffer.alloc(tailSize);
+      await fh.read(buf, 0, tailSize, st.size - tailSize);
+      return buf.includes(Buffer.from("moov"));
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wait for the recording process to exit, then poll for the moov atom to
+ * confirm the file is playable. simctl writes the moov atom as its last act
+ * before exiting on SIGINT — size stability alone doesn't guarantee it landed.
+ */
 async function waitForExitAndFinalize(
   process: ChildProcess,
   outputPath: string,
-  timeoutMs = 10_000
+  timeoutMs = 15_000
 ): Promise<{ sizeBytes: number }> {
   const { stat } = await import("node:fs/promises");
 
@@ -51,31 +83,35 @@ async function waitForExitAndFinalize(
     process.on("exit", async () => {
       clearTimeout(timer);
 
-      // Poll the file size until it stabilizes (simctl writes the moov atom on exit).
-      let lastSize = -1;
-      let stable = 0;
-      for (let i = 0; i < 20; i++) {
-        try {
-          const st = await stat(outputPath);
-          if (st.size === lastSize) {
-            stable++;
-            if (stable >= 2) break;
-          } else {
-            stable = 0;
-          }
-          lastSize = st.size;
-        } catch {
-          // File might not be written yet.
+      // Poll for the moov atom — the file isn't playable without it. simctl
+      // writes it as its final step, so we check the tail of the file. Up to
+      // 50 attempts × 100ms = 5s of polling after process exit.
+      for (let i = 0; i < 50; i++) {
+        if (await hasMoovAtom(outputPath)) {
+          const finalStat = await stat(outputPath).catch(() => ({ size: 0 }));
+          resolve({ sizeBytes: finalStat.size });
+          return;
         }
         await new Promise((r) => setTimeout(r, 100));
       }
 
-      const finalStat = await stat(outputPath).catch(() => ({ size: 0 }));
-      resolve({ sizeBytes: finalStat.size });
+      // moov not found — the file exists but is corrupt.
+      const st = await stat(outputPath).catch(() => ({ size: 0 }));
+      reject(new Error(
+        `Recording did not finalize correctly — the MP4 is missing the moov atom ` +
+        `(file is ${st.size > 0 ? `${(st.size / 1024 / 1024).toFixed(1)} MB` : "empty"} but unplayable). ` +
+        `This usually means simctl was killed before it could write the index. ` +
+        `Retry after ensuring no duplicate tool-servers are running: ` +
+        `\`argent server stop && argent server start\`, or reboot the simulator: ` +
+        `\`xcrun simctl shutdown <UDID> && xcrun simctl boot <UDID>\`.`
+      ));
     });
 
-    // Send SIGTERM to stop the recording gracefully.
-    process.kill("SIGTERM");
+    // Send SIGINT to stop the recording gracefully. simctl io recordVideo
+    // writes the MP4 moov atom (index/metadata) ONLY on SIGINT — SIGTERM and
+    // SIGKILL leave the file unplayable ("could not be opened") because the
+    // moov atom is missing.
+    process.kill("SIGINT");
   });
 }
 
@@ -86,7 +122,7 @@ export function createStopVideoRecordingTool(
     id: "stop-video-recording",
     description: `Stop an active video recording and return the MP4 file as a downloadable artifact.
 Pass the same \`udid\` used to start the recording. The recording process is terminated, the file is finalized, and the MP4 is registered as an artifact.
-Fails if no recording is active on the device, or if the file cannot be finalized within 10 seconds.`,
+Fails if no recording is active on the device, if the file cannot be finalized within 15 seconds, or if the finalized file is missing the moov atom (unplayable).`,
     searchHint: "video record stop finalize mp4 artifact",
     zodSchema,
     outputHint: "text",
@@ -104,7 +140,7 @@ Fails if no recording is active on the device, or if the file cannot be finalize
         );
       }
 
-      // Kill the process and wait for the file to finalize.
+      // Kill the process and wait for the file to finalize (moov atom verified).
       const { sizeBytes } = await waitForExitAndFinalize(
         session.process,
         session.outputPath

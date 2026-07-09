@@ -50,36 +50,38 @@ You can still edit the .yaml file directly afterwards to remove or reorder steps
     }
     const flow = parseFlow(flowFile);
 
-    const summary = flow.steps.map((step, i) => {
+    const summary = flow.steps.map((entry, i) => {
+      const step = entry.step;
+      const opt = entry.optional ? " (optional)" : "";
       const n = i + 1;
       switch (step.kind) {
         case "echo":
-          return `${n}. echo: ${step.message}`;
+          return `${n}. echo: ${step.message}${opt}`;
         case "launch":
-          return `${n}. launch: ${typeof step.app === "string" ? step.app : JSON.stringify(step.app)}`;
+          return `${n}. launch: ${typeof step.app === "string" ? step.app : JSON.stringify(step.app)}${opt}`;
         case "run":
-          return `${n}. run: ${step.flow}`;
+          return `${n}. run: ${step.flow}${opt}`;
         case "tap":
-          return `${n}. tap: ${JSON.stringify(step.selector)}`;
+          return `${n}. tap: ${JSON.stringify(step.selector)}${opt}`;
         case "type":
-          return `${n}. type: ${JSON.stringify(step.into)} ← "${step.text}"`;
+          return `${n}. type: ${JSON.stringify(step.into)} ← "${step.text}"${opt}`;
         case "await":
         case "assert": {
           const tail =
             step.condition === "text"
               ? `text ${JSON.stringify(step.selector)} == "${step.expectedText ?? ""}"`
               : `${step.condition} ${JSON.stringify(step.selector)}`;
-          return `${n}. ${step.kind}: ${tail}`;
+          return `${n}. ${step.kind}: ${tail}${opt}`;
         }
         case "wait":
-          return `${n}. wait: ${step.ms}ms`;
+          return `${n}. wait: ${step.ms}ms${opt}`;
         case "scroll-to":
-          return `${n}. scroll-to: ${JSON.stringify(step.target)} (${step.direction})`;
+          return `${n}. scroll-to: ${JSON.stringify(step.target)} (${step.direction})${opt}`;
         case "snapshot":
-          return `${n}. snapshot: ${step.name}`;
+          return `${n}. snapshot: ${step.name}${opt}`;
         case "tool":
         default:
-          return `${n}. tool: ${step.name} ${JSON.stringify(step.args)}`;
+          return `${n}. tool: ${step.name} ${JSON.stringify(step.args)}${opt}`;
       }
     });
 

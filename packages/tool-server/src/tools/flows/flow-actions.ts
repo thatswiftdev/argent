@@ -6,7 +6,6 @@ import {
   type DescribeSource,
 } from "../describe/contract";
 import {
-  selectorToFrame,
   findAll,
   evaluateCondition,
   firstInReadingOrder,
@@ -29,6 +28,8 @@ export interface ActionEnv {
   ctx?: ToolContext;
   device: DeviceInfo;
   signal?: AbortSignal;
+  /** BundleId from a leading `launch` step — passed to native-devtools for explicit app targeting. */
+  bundleId?: string;
 }
 
 /** Outcome of a selector directive: ok, or a machine-readable reason it failed. */
@@ -201,11 +202,70 @@ function flowFindAll(tree: DescribeNode, sel: FlowSelector): DescribeNode[] {
   return fallback;
 }
 
-/** Identifier-first-then-text frame resolution for a (possibly loose) selector. */
+/** Roles that indicate a tappable element, ranked above plain text labels. */
+/**
+ * Roles that are always tappable. Ranked highest in selector resolution.
+ */
+const TAPPABLE_ROLES = new Set([
+  "AXButton",
+  "AXLink",
+]);
+
+/**
+ * Roles that are NOT interactive — text labels and images are display-only.
+ * When a text query matches both a label and its enclosing container, the
+ * container (which has the tap handler) should win.
+ */
+const DISPLAY_ONLY_ROLES = new Set([
+  "AXStaticText",
+  "AXImage",
+]);
+
+/**
+ * Identifier-first-then-text frame resolution for a (possibly loose) selector.
+ * When multiple visible elements match, prefer in priority order:
+ * 1. Tappable roles (AXButton, AXLink) — always interactive
+ * 2. Non-display-only roles (AXGroup = custom container/cell with a tap handler)
+ * 3. Fallback to all matches
+ *
+ * This solves two real problems:
+ * - `tap: "Masuk"` matches both AXButton and inner AXStaticText → button wins
+ * - `tap: "LioJastip"` matches both a custom cell (AXGroup) and inner label
+ *   (AXStaticText) → the cell wins because the label's frame center may miss
+ *   the cell's actual tap target
+ */
 function flowSelectorToFrame(tree: DescribeNode, sel: FlowSelector): DescribeFrame | undefined {
   for (const s of selectorAlternatives(sel)) {
-    const frame = selectorToFrame(tree, s);
-    if (frame) return frame;
+    const matches = findAll(tree, s).filter(isVisible);
+    if (matches.length === 0) continue;
+
+    // Tier 1: explicitly tappable (button, link)
+    let pool = matches.filter((n) => TAPPABLE_ROLES.has(n.role));
+
+    // Tier 2: not a display-only role (custom containers, cells)
+    if (pool.length === 0) {
+      pool = matches.filter((n) => !DISPLAY_ONLY_ROLES.has(n.role));
+    }
+
+    // Tier 3: fallback to everything
+    if (pool.length === 0) pool = matches;
+
+    // Pick the smallest match from the preferred pool (same logic as
+    // selectorToFrame: tighter = more specific).
+    let best = pool[0]!;
+    for (const n of pool.slice(1)) {
+      const areaN = n.frame.width * n.frame.height;
+      const areaBest = best.frame.width * best.frame.height;
+      const areaDelta = areaN - areaBest;
+      if (
+        areaDelta < 0 ||
+        (areaDelta === 0 &&
+          (n.frame.y < best.frame.y || (n.frame.y === best.frame.y && n.frame.x < best.frame.x)))
+      ) {
+        best = n;
+      }
+    }
+    return best.frame;
   }
   return undefined;
 }
@@ -232,7 +292,7 @@ export async function settleTree(env: ActionEnv): Promise<DescribeNode | undefin
   for (;;) {
     if (env.signal?.aborted) return undefined;
     try {
-      const { tree } = await fetchFlowTree(env.registry, env.device);
+      const { tree } = await fetchFlowTree(env.registry, env.device, env.bundleId);
       const fp = treeFingerprint(tree);
       if (prevFp !== undefined && fp === prevFp) return tree;
       prevFp = fp;
@@ -307,7 +367,7 @@ async function waitForFocus(
   for (;;) {
     if (env.signal?.aborted) return;
     try {
-      const { tree, source } = await fetchFlowTree(env.registry, env.device);
+      const { tree, source } = await fetchFlowTree(env.registry, env.device, env.bundleId);
       if (!FOCUS_REPORTING_SOURCES.has(source)) return;
       const target = flowSelectorToFrame(tree, into) ?? tappedFrame;
       if (collectFocused(tree, []).some((n) => framesOverlap(n.frame, target))) return;
@@ -601,7 +661,7 @@ async function waitForCondition(
   for (;;) {
     if (env.signal?.aborted) return ABORTED_OUTCOME;
     try {
-      const data = await fetchFlowTree(env.registry, env.device);
+      const data = await fetchFlowTree(env.registry, env.device, env.bundleId);
       lastMatches = flowFindAll(data.tree, step.selector);
       fetchError = undefined;
       everMatched ||= lastMatches.length > 0;

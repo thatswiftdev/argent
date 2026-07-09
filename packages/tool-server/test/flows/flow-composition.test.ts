@@ -50,15 +50,15 @@ describe("flow composition (run:)", () => {
     await writeFlow("login", {
       executionPrerequisite: "On login screen",
       steps: [
-        { kind: "echo", message: "logging in" },
-        { kind: "tool", name: "tap", args: { x: 0.5 } },
+        { step: { kind: "echo", message: "logging in" } },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
       ],
     });
     await writeFlow("main", {
       executionPrerequisite: "",
       steps: [
-        { kind: "run", flow: "login" },
-        { kind: "echo", message: "done" },
+        { step: { kind: "run", flow: "login" } },
+        { step: { kind: "echo", message: "done" } },
       ],
     });
 
@@ -83,11 +83,11 @@ describe("flow composition (run:)", () => {
   it("rejects running an e2e flow as a fragment", async () => {
     await writeFlow("other-e2e", {
       executionPrerequisite: "",
-      steps: [{ kind: "launch", app: "com.acme.app" }],
+      steps: [{ step: { kind: "launch", app: "com.acme.app" } }],
     });
     await writeFlow("main", {
       executionPrerequisite: "",
-      steps: [{ kind: "run", flow: "other-e2e" }],
+      steps: [{ step: { kind: "run", flow: "other-e2e" } }],
     });
     const runFlow = createRunFlowTool(mockRegistry());
     const result = asRun(
@@ -99,11 +99,11 @@ describe("flow composition (run:)", () => {
   });
 
   it("detects a cyclic run reference", async () => {
-    await writeFlow("a", { executionPrerequisite: "", steps: [{ kind: "run", flow: "b" }] });
-    await writeFlow("b", { executionPrerequisite: "", steps: [{ kind: "run", flow: "a" }] });
+    await writeFlow("a", { executionPrerequisite: "", steps: [{ step: { kind: "run", flow: "b" } }] });
+    await writeFlow("b", { executionPrerequisite: "", steps: [{ step: { kind: "run", flow: "a" } }] });
     await writeFlow("main", {
       executionPrerequisite: "",
-      steps: [{ kind: "run", flow: "a" }],
+      steps: [{ step: { kind: "run", flow: "a" } }],
     });
     const runFlow = createRunFlowTool(mockRegistry());
     const result = asRun(
@@ -117,8 +117,8 @@ describe("flow composition (run:)", () => {
     await writeFlow("main", {
       executionPrerequisite: "",
       steps: [
-        { kind: "launch", app: "com.acme.app" },
-        { kind: "echo", message: "running" },
+        { step: { kind: "launch", app: "com.acme.app" } },
+        { step: { kind: "echo", message: "running" } },
       ],
     });
     const registry = mockRegistry();
@@ -139,8 +139,8 @@ describe("flow composition (run:)", () => {
     await writeFlow("main", {
       executionPrerequisite: "",
       steps: [
-        { kind: "launch", app: { android: "com.acme.app" } }, // DEVICE is iOS
-        { kind: "echo", message: "should never run" },
+        { step: { kind: "launch", app: { android: "com.acme.app" } } }, // DEVICE is iOS
+        { step: { kind: "echo", message: "should never run" } },
       ],
     });
     const result = asRun(
@@ -159,8 +159,8 @@ describe("flow composition (run:)", () => {
     await writeFlow("main", {
       executionPrerequisite: "",
       steps: [
-        { kind: "launch", app: "com.acme.app" },
-        { kind: "echo", message: "should never run" },
+        { step: { kind: "launch", app: "com.acme.app" } },
+        { step: { kind: "echo", message: "should never run" } },
       ],
     });
     // Registry whose native-devtools service is unavailable: the launch step
@@ -238,20 +238,20 @@ describe("flow validation", () => {
     const flow = {
       executionPrerequisite: "",
       steps: [
-        { kind: "launch" as const, app: "com.acme.app" },
+        { step: { kind: "launch" as const, app: "com.acme.app" } },
         // Text-only selectors serialize to bare strings, which parse back loose.
-        { kind: "tap" as const, selector: { text: "Login", loose: true } },
-        { kind: "tap" as const, x: 0.5, y: 0.57 },
-        { kind: "type" as const, into: { identifier: "email" }, text: "a@b.com" },
-        {
+        { step: { kind: "tap" as const, selector: { text: "Login", loose: true } } },
+        { step: { kind: "tap" as const, x: 0.5, y: 0.57 } },
+        { step: { kind: "type" as const, into: { identifier: "email" }, text: "a@b.com" } },
+        { step: {
           kind: "assert" as const,
           condition: "visible" as const,
           selector: { text: "Welcome", loose: true },
-        },
-        { kind: "snapshot" as const, name: "home", maxMismatch: 0.5 },
-        { kind: "run" as const, flow: "login" },
+        } },
+        { step: { kind: "snapshot" as const, name: "home", maxMismatch: 0.5 } },
+        { step: { kind: "run" as const, flow: "login" } },
         // Mid-flow relaunch with a per-platform map.
-        { kind: "launch" as const, app: { ios: "com.acme.app", android: "com.acme.android" } },
+        { step: { kind: "launch" as const, app: { ios: "com.acme.app", android: "com.acme.android" } } },
       ],
     };
     const parsed = parseFlow(serializeFlow(flow));

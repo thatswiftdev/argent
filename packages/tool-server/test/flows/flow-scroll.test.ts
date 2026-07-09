@@ -102,7 +102,7 @@ describe("scroll-to directive", () => {
 
     await writeFlow("scroller", {
       executionPrerequisite: "",
-      steps: [{ kind: "scroll-to", target: { text: "Order #1234" }, direction: "down" }],
+      steps: [{ step: { kind: "scroll-to", target: { text: "Order #1234" }, direction: "down" } }],
     });
 
     const tool = createRunFlowTool(registry);
@@ -127,7 +127,7 @@ describe("scroll-to directive", () => {
 
     await writeFlow("present", {
       executionPrerequisite: "",
-      steps: [{ kind: "scroll-to", target: { text: "Account" }, direction: "down" }],
+      steps: [{ step: { kind: "scroll-to", target: { text: "Account" }, direction: "down" } }],
     });
 
     const tool = createRunFlowTool(registry);
@@ -161,7 +161,7 @@ describe("scroll-to directive", () => {
 
     await writeFlow("flush", {
       executionPrerequisite: "",
-      steps: [{ kind: "scroll-to", target: { text: "Order #1234" }, direction: "down" }],
+      steps: [{ step: { kind: "scroll-to", target: { text: "Order #1234" }, direction: "down" } }],
     });
 
     const tool = createRunFlowTool(registry);
@@ -188,7 +188,7 @@ describe("scroll-to directive", () => {
 
     await writeFlow("last-item", {
       executionPrerequisite: "",
-      steps: [{ kind: "scroll-to", target: { text: "Bottom row 8" }, direction: "down" }],
+      steps: [{ step: { kind: "scroll-to", target: { text: "Bottom row 8" }, direction: "down" } }],
     });
 
     const tool = createRunFlowTool(registry);
@@ -231,12 +231,12 @@ describe("scroll-to directive", () => {
     await writeFlow("carousel", {
       executionPrerequisite: "",
       steps: [
-        {
+        { step: {
           kind: "scroll-to",
           target: { text: "Card 7" },
           direction: "right",
           within: { identifier: "carousel" },
-        },
+        } },
       ],
     });
 
@@ -279,12 +279,12 @@ describe("scroll-to directive", () => {
     await writeFlow("sliver", {
       executionPrerequisite: "",
       steps: [
-        {
+        { step: {
           kind: "scroll-to",
           target: { text: "Row 9" },
           direction: "down",
           within: { identifier: "strip" },
-        },
+        } },
       ],
     });
 
@@ -328,12 +328,12 @@ describe("scroll-to directive", () => {
     await writeFlow("ticker", {
       executionPrerequisite: "",
       steps: [
-        {
+        { step: {
           kind: "scroll-to",
           target: { text: "Never There" },
           direction: "down",
           within: { identifier: "list" },
-        },
+        } },
       ],
     });
 
@@ -359,7 +359,7 @@ describe("scroll-to directive", () => {
 
     await writeFlow("stuck", {
       executionPrerequisite: "",
-      steps: [{ kind: "scroll-to", target: { text: "Never There" }, direction: "down" }],
+      steps: [{ step: { kind: "scroll-to", target: { text: "Never There" }, direction: "down" } }],
     });
 
     const tool = createRunFlowTool(registry);

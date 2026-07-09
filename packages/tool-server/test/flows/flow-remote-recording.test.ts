@@ -102,8 +102,8 @@ describe("flow recording with a remote client (probe miss)", () => {
     const directive = stepResult.savedTo as { path: string; content: string };
     expect(directive.path).toBe(CLIENT_FLOW_PATH);
     expect(parseFlow(directive.content).steps).toEqual([
-      { kind: "echo", message: "label" },
-      { kind: "tool", name: "tap", args: { x: 0.5 } },
+      { step: { kind: "echo", message: "label" } },
+      { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
     ]);
     await expect(fs.stat(CLIENT_ROOT)).rejects.toThrow();
   });

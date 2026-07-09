@@ -31,7 +31,7 @@ describe("serializeFlow", () => {
   it("serializes echo steps", () => {
     const flow: FlowFile = {
       executionPrerequisite: "Fresh reload",
-      steps: [{ kind: "echo", message: "Hello" }],
+      steps: [{ step: { kind: "echo", message: "Hello" } }],
     };
     const result = serializeFlow(flow);
     expect(result).toContain("- echo: Hello");
@@ -40,7 +40,7 @@ describe("serializeFlow", () => {
   it("serializes tool steps with args", () => {
     const flow: FlowFile = {
       executionPrerequisite: "",
-      steps: [{ kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } }],
+      steps: [{ step: { kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } } }],
     };
     const result = serializeFlow(flow);
     expect(result).toContain("- tool: tap");
@@ -51,7 +51,7 @@ describe("serializeFlow", () => {
   it("serializes tool steps with empty args (omits args key)", () => {
     const flow: FlowFile = {
       executionPrerequisite: "",
-      steps: [{ kind: "tool", name: "screenshot", args: {} }],
+      steps: [{ step: { kind: "tool", name: "screenshot", args: {} } }],
     };
     const result = serializeFlow(flow);
     expect(result).toContain("- tool: screenshot");
@@ -66,20 +66,20 @@ describe("parseFlow", () => {
     const content = "executionPrerequisite: App on home screen\nsteps:\n  - echo: Hello\n";
     const flow = parseFlow(content);
     expect(flow.executionPrerequisite).toBe("App on home screen");
-    expect(flow.steps).toEqual([{ kind: "echo", message: "Hello" }]);
+    expect(flow.steps).toEqual([{ step: { kind: "echo", message: "Hello" } }]);
   });
 
   it("parses tool entries with args", () => {
     const content =
       'executionPrerequisite: ""\nsteps:\n  - tool: tap\n    args:\n      x: 0.5\n      y: 0.3\n';
     const flow = parseFlow(content);
-    expect(flow.steps).toEqual([{ kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } } }]);
   });
 
   it("parses tool entries with no args", () => {
     const content = 'executionPrerequisite: ""\nsteps:\n  - tool: screenshot\n';
     const flow = parseFlow(content);
-    expect(flow.steps).toEqual([{ kind: "tool", name: "screenshot", args: {} }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tool", name: "screenshot", args: {} } }]);
   });
 
   it("parses a multi-step flow", () => {
@@ -99,10 +99,10 @@ describe("parseFlow", () => {
     const flow = parseFlow(content);
     expect(flow.executionPrerequisite).toBe("Settings open");
     expect(flow.steps).toEqual([
-      { kind: "echo", message: "Step 1" },
-      { kind: "tool", name: "tap", args: { x: 0.5 } },
-      { kind: "echo", message: "Step 2" },
-      { kind: "tool", name: "screenshot", args: { udid: "ABC" } },
+      { step: { kind: "echo", message: "Step 1" } },
+      { step: { kind: "tool", name: "tap", args: { x: 0.5 } } },
+      { step: { kind: "echo", message: "Step 2" } },
+      { step: { kind: "tool", name: "screenshot", args: { udid: "ABC" } } },
     ]);
   });
 
@@ -116,7 +116,7 @@ describe("parseFlow", () => {
     const content = "steps:\n  - echo: Hello\n";
     const flow = parseFlow(content);
     expect(flow.executionPrerequisite).toBe("");
-    expect(flow.steps).toEqual([{ kind: "echo", message: "Hello" }]);
+    expect(flow.steps).toEqual([{ step: { kind: "echo", message: "Hello" } }]);
   });
 
   it("throws on unrecognized entries", () => {
@@ -141,25 +141,25 @@ describe("parseFlow", () => {
   it("sugars a bare-string selector into a loose { text } for tap", () => {
     const flow = parseFlow("steps:\n  - tap: Settings\n");
     // Bare string ⇒ loose: resolves identifier-first, then falls back to text.
-    expect(flow.steps).toEqual([{ kind: "tap", selector: { text: "Settings", loose: true } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tap", selector: { text: "Settings", loose: true } } }]);
   });
 
   it("sugars a bare-string selector for type.into", () => {
     const flow = parseFlow('steps:\n  - type: { into: email, text: "a@b.com" }\n');
     expect(flow.steps).toEqual([
-      { kind: "type", into: { text: "email", loose: true }, text: "a@b.com" },
+      { step: { kind: "type", into: { text: "email", loose: true }, text: "a@b.com" } },
     ]);
   });
 
   it("defaults type.submit to on (no submit key in the parsed model)", () => {
     const flow = parseFlow('steps:\n  - type: { into: email, text: "a@b.com" }\n');
-    expect(flow.steps[0]).not.toHaveProperty("submit");
+    expect(flow.steps[0].step).not.toHaveProperty("submit");
   });
 
   it("parses and round-trips an explicit type.submit: false opt-out", () => {
     const flow = parseFlow('steps:\n  - type: { into: email, text: "a@b.com", submit: false }\n');
     expect(flow.steps).toEqual([
-      { kind: "type", into: { text: "email", loose: true }, text: "a@b.com", submit: false },
+      { step: { kind: "type", into: { text: "email", loose: true }, text: "a@b.com", submit: false } },
     ]);
     expect(serializeFlow(flow)).toContain("submit: false");
     expect(parseFlow(serializeFlow(flow)).steps).toEqual(flow.steps);
@@ -171,7 +171,7 @@ describe("parseFlow", () => {
 
   it("keeps an explicit { text } map strict (no loose fallback)", () => {
     const flow = parseFlow("steps:\n  - tap: { text: Settings }\n");
-    expect(flow.steps).toEqual([{ kind: "tap", selector: { text: "Settings" } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "tap", selector: { text: "Settings" } } }]);
   });
 
   it("parses condition-as-key await/assert sugar (visible/exists/hidden)", () => {
@@ -184,9 +184,9 @@ describe("parseFlow", () => {
       ].join("\n")
     );
     expect(flow.steps).toEqual([
-      { kind: "await", condition: "visible", selector: { text: "Account", loose: true } },
-      { kind: "assert", condition: "exists", selector: { identifier: "row" } },
-      { kind: "await", condition: "hidden", selector: { text: "spinner", loose: true } },
+      { step: { kind: "await", condition: "visible", selector: { text: "Account", loose: true } } },
+      { step: { kind: "assert", condition: "exists", selector: { identifier: "row" } } },
+      { step: { kind: "await", condition: "hidden", selector: { text: "spinner", loose: true } } },
     ]);
   });
 
@@ -195,13 +195,13 @@ describe("parseFlow", () => {
       'steps:\n  - assert: { text: { in: { identifier: counter }, contains: "Taps: 0" } }\n'
     );
     expect(flow.steps).toEqual([
-      {
+      { step: {
         kind: "assert",
         condition: "text",
         selector: { identifier: "counter" },
         expectedText: "Taps: 0",
         textMatch: "contains",
-      },
+      } },
     ]);
   });
 
@@ -210,13 +210,13 @@ describe("parseFlow", () => {
       'steps:\n  - assert: { text: { in: { identifier: counter }, equals: "Taps: 0" } }\n'
     );
     expect(flow.steps).toEqual([
-      {
+      { step: {
         kind: "assert",
         condition: "text",
         selector: { identifier: "counter" },
         expectedText: "Taps: 0",
         textMatch: "equals",
-      },
+      } },
     ]);
   });
 
@@ -263,21 +263,21 @@ describe("parseFlow", () => {
       executionPrerequisite: "",
       steps: [
         // loose ⇒ bare-string sugar; a strict { text } would keep the map form
-        { kind: "assert", condition: "visible", selector: { text: "Welcome", loose: true } },
-        {
+        { step: { kind: "assert", condition: "visible", selector: { text: "Welcome", loose: true } } },
+        { step: {
           kind: "assert",
           condition: "text",
           selector: { identifier: "counter" },
           expectedText: "Taps: 0",
           textMatch: "contains",
-        },
-        {
+        } },
+        { step: {
           kind: "assert",
           condition: "text",
           selector: { identifier: "total" },
           expectedText: "1",
           textMatch: "equals",
-        },
+        } },
       ],
     });
     expect(yaml).toContain("visible: Welcome");
@@ -295,40 +295,40 @@ describe("parseFlow", () => {
     const flow: FlowFile = {
       executionPrerequisite: "",
       steps: [
-        { kind: "tap", selector: { text: "Login", loose: true } },
-        { kind: "tap", selector: { text: "Save" } },
-        { kind: "type", into: { text: "email", loose: true }, text: "a@b.com" },
-        { kind: "type", into: { text: "Password" }, text: "hunter2" },
-        { kind: "await", condition: "hidden", selector: { identifier: "spinner" } },
-        { kind: "await", condition: "visible", selector: { text: "Welcome" } },
-        { kind: "wait", ms: 500 },
-        {
+        { step: { kind: "tap", selector: { text: "Login", loose: true } } },
+        { step: { kind: "tap", selector: { text: "Save" } } },
+        { step: { kind: "type", into: { text: "email", loose: true }, text: "a@b.com" } },
+        { step: { kind: "type", into: { text: "Password" }, text: "hunter2" } },
+        { step: { kind: "await", condition: "hidden", selector: { identifier: "spinner" } } },
+        { step: { kind: "await", condition: "visible", selector: { text: "Welcome" } } },
+        { step: { kind: "wait", ms: 500 } },
+        { step: {
           kind: "assert",
           condition: "text",
           selector: { text: "Taps:", loose: true },
           expectedText: "Taps: 0",
           textMatch: "contains",
-        },
-        {
+        } },
+        { step: {
           kind: "assert",
           condition: "text",
           selector: { identifier: "total" },
           expectedText: "1",
           textMatch: "equals",
-        },
-        { kind: "scroll-to", target: { text: "Order #1234", loose: true }, direction: "down" },
-        {
+        } },
+        { step: { kind: "scroll-to", target: { text: "Order #1234", loose: true }, direction: "down" } },
+        { step: {
           kind: "scroll-to",
           target: { text: "Summer Sale", loose: true },
           direction: "right",
           within: { identifier: "promotions" },
-        },
-        {
+        } },
+        { step: {
           kind: "scroll-to",
           target: { text: "Checkout" },
           direction: "down",
           within: { text: "Cart items" },
-        },
+        } },
       ],
     };
     expect(parseFlow(serializeFlow(flow)).steps).toEqual(flow.steps);
@@ -341,7 +341,7 @@ describe("parseFlow", () => {
     // the identifier-first fallback they were never verified against.
     const flow: FlowFile = {
       executionPrerequisite: "",
-      steps: [{ kind: "tap", selector: { text: "Save" } }],
+      steps: [{ step: { kind: "tap", selector: { text: "Save" } } }],
     };
     const once = serializeFlow(flow);
     expect(once).toContain("text: Save");
@@ -356,13 +356,13 @@ describe("parseFlow", () => {
       ["steps:", "  - scroll-to: { target: Account, direction: down }"].join("\n")
     );
     expect(flow.steps).toEqual([
-      { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" },
+      { step: { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" } },
     ]);
   });
 
   it("parses a bare-number wait as milliseconds", () => {
     const flow = parseFlow("steps:\n  - wait: 750\n");
-    expect(flow.steps).toEqual([{ kind: "wait", ms: 750 }]);
+    expect(flow.steps).toEqual([{ step: { kind: "wait", ms: 750 } }]);
   });
 
   it("rejects a wait that is not a non-negative number", () => {
@@ -373,12 +373,12 @@ describe("parseFlow", () => {
   it("parses an await timeout in milliseconds", () => {
     const flow = parseFlow("steps:\n  - await: { visible: Account, timeout: 10000 }\n");
     expect(flow.steps).toEqual([
-      {
+      { step: {
         kind: "await",
         condition: "visible",
         selector: { text: "Account", loose: true },
         timeout: 10000,
-      },
+      } },
     ]);
   });
 
@@ -402,20 +402,20 @@ describe("parseFlow", () => {
   it("defaults scroll-to direction to down", () => {
     const flow = parseFlow("steps:\n  - scroll-to: { target: Account }\n");
     expect(flow.steps).toEqual([
-      { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" },
+      { step: { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" } },
     ]);
   });
 
   it("parses a bare-string scroll-to as a down-scroll to that target", () => {
     const flow = parseFlow("steps:\n  - scroll-to: Account\n");
     expect(flow.steps).toEqual([
-      { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" },
+      { step: { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" } },
     ]);
   });
 
   it("serializes the default scroll-to back to the bare-string sugar", () => {
     const steps = [
-      { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" },
+      { step: { kind: "scroll-to", target: { text: "Account", loose: true }, direction: "down" } },
     ] as FlowFile["steps"];
     const yaml = serializeFlow({ executionPrerequisite: "", steps });
     expect(yaml).toContain("- scroll-to: Account");
@@ -424,13 +424,13 @@ describe("parseFlow", () => {
 
   it("parses a bare-string snapshot as its name", () => {
     const flow = parseFlow("steps:\n  - snapshot: home\n");
-    expect(flow.steps).toEqual([{ kind: "snapshot", name: "home" }]);
+    expect(flow.steps).toEqual([{ step: { kind: "snapshot", name: "home" } }]);
   });
 
   it("serializes a name-only snapshot as a bare string, keeps the map with maxMismatch", () => {
     const steps = [
-      { kind: "snapshot", name: "home" },
-      { kind: "snapshot", name: "cart", maxMismatch: 1.5 },
+      { step: { kind: "snapshot", name: "home" } },
+      { step: { kind: "snapshot", name: "cart", maxMismatch: 1.5 } },
     ] as FlowFile["steps"];
     const yaml = serializeFlow({ executionPrerequisite: "", steps });
     expect(yaml).toContain("- snapshot: home");
@@ -444,7 +444,7 @@ describe("parseFlow", () => {
 
   it("accepts a string-number maxMismatch", () => {
     const flow = parseFlow('steps:\n  - snapshot: { name: home, maxMismatch: "1.5" }\n');
-    expect(flow.steps).toEqual([{ kind: "snapshot", name: "home", maxMismatch: 1.5 }]);
+    expect(flow.steps).toEqual([{ step: { kind: "snapshot", name: "home", maxMismatch: 1.5 } }]);
   });
 
   it("rejects a non-numeric, negative, or out-of-range maxMismatch", () => {
@@ -474,10 +474,10 @@ describe("parseFlow", () => {
     const flow: FlowFile = {
       executionPrerequisite: "App freshly loaded on home screen",
       steps: [
-        { kind: "echo", message: "Launch app" },
-        { kind: "tool", name: "launch-app", args: { bundleId: "com.test" } },
-        { kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } },
-        { kind: "echo", message: "Done" },
+        { step: { kind: "echo", message: "Launch app" } },
+        { step: { kind: "tool", name: "launch-app", args: { bundleId: "com.test" } } },
+        { step: { kind: "tool", name: "tap", args: { x: 0.5, y: 0.3 } } },
+        { step: { kind: "echo", message: "Done" } },
       ],
     };
     const serialized = serializeFlow(flow);
@@ -490,20 +490,20 @@ describe("parseFlow", () => {
 describe("chromium launch parsing", () => {
   it("parses a chromium launch with a bare-string app path", () => {
     const flow = parseFlow("steps:\n  - launch: { chromium: ./app }\n");
-    expect(flow.steps).toEqual([{ kind: "launch", app: { chromium: "./app" } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "launch", app: { chromium: "./app" } } }]);
   });
 
   it("parses a chromium launch with a { path, args } map", () => {
     const flow = parseFlow("steps:\n  - launch: { chromium: { path: ./app, args: [--e2e] } }\n");
     expect(flow.steps).toEqual([
-      { kind: "launch", app: { chromium: { path: "./app", args: ["--e2e"] } } },
+      { step: { kind: "launch", app: { chromium: { path: "./app", args: ["--e2e"] } } } },
     ]);
   });
 
   it("parses a mixed per-platform launch (ios id + chromium path)", () => {
     const flow = parseFlow("steps:\n  - launch: { ios: com.acme.app, chromium: ./app }\n");
     expect(flow.steps).toEqual([
-      { kind: "launch", app: { ios: "com.acme.app", chromium: "./app" } },
+      { step: { kind: "launch", app: { ios: "com.acme.app", chromium: "./app" } } },
     ]);
   });
 
@@ -511,7 +511,7 @@ describe("chromium launch parsing", () => {
     const flow: FlowFile = {
       executionPrerequisite: "",
       steps: [
-        { kind: "launch", app: { chromium: { path: "/abs/app", args: ["--foo", "--bar"] } } },
+        { step: { kind: "launch", app: { chromium: { path: "/abs/app", args: ["--foo", "--bar"] } } } },
       ],
     };
     expect(parseFlow(serializeFlow(flow)).steps).toEqual(flow.steps);
@@ -565,7 +565,7 @@ describe("chromiumLaunchSpec", () => {
 describe("native launch shorthand", () => {
   it("parses a native-only launch and round-trips it", () => {
     const flow = parseFlow("steps:\n  - launch: { native: com.acme.app }\n");
-    expect(flow.steps).toEqual([{ kind: "launch", app: { native: "com.acme.app" } }]);
+    expect(flow.steps).toEqual([{ step: { kind: "launch", app: { native: "com.acme.app" } } }]);
     expect(parseFlow(serializeFlow(flow)).steps).toEqual(flow.steps);
   });
 
@@ -574,10 +574,10 @@ describe("native launch shorthand", () => {
       "steps:\n  - launch: { native: com.acme.app, android: com.acme.app.debug, chromium: ./app }\n"
     );
     expect(flow.steps).toEqual([
-      {
+      { step: {
         kind: "launch",
         app: { native: "com.acme.app", android: "com.acme.app.debug", chromium: "./app" },
-      },
+      } },
     ]);
   });
 

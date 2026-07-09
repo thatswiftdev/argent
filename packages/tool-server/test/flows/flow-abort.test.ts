@@ -83,7 +83,7 @@ describe("run cancellation mid-directive", () => {
 
     await writeFlow("cancelled-tap", {
       executionPrerequisite: "",
-      steps: [{ kind: "tap", selector: { text: "Checkout", loose: true } }],
+      steps: [{ step: { kind: "tap", selector: { text: "Checkout", loose: true } } }],
     });
 
     const result = await run("cancelled-tap", mockRegistry(calls), controller.signal);
@@ -115,7 +115,7 @@ describe("run cancellation mid-directive", () => {
 
     await writeFlow("cancelled-type", {
       executionPrerequisite: "",
-      steps: [{ kind: "type", into: { identifier: "email" }, text: "a@b.com" }],
+      steps: [{ step: { kind: "type", into: { identifier: "email" }, text: "a@b.com" } }],
     });
 
     const result = await run("cancelled-type", mockRegistry(calls), controller.signal);
@@ -143,7 +143,7 @@ describe("run cancellation mid-directive", () => {
 
     await writeFlow("cancelled-await", {
       executionPrerequisite: "",
-      steps: [{ kind: "await", condition: "visible", selector: { identifier: "spinner" } }],
+      steps: [{ step: { kind: "await", condition: "visible", selector: { identifier: "spinner" } } }],
     });
 
     const result = await run("cancelled-await", mockRegistry(calls), controller.signal);

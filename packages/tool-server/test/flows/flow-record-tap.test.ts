@@ -92,7 +92,7 @@ describe("flow-add-step tap selector capture", () => {
 
     expect(result.message).not.toContain("—");
     expect(await recordedSteps()).toEqual([
-      { kind: "tap", selector: { identifier: "add-to-cart" } },
+      { step: { kind: "tap", selector: { identifier: "add-to-cart" } } },
     ]);
   });
 
@@ -101,7 +101,7 @@ describe("flow-add-step tap selector capture", () => {
 
     await recordTap({ x: 0.5, y: 0.52 });
 
-    expect(await recordedSteps()).toEqual([{ kind: "tap", selector: { text: "Add to cart" } }]);
+    expect(await recordedSteps()).toEqual([{ step: { kind: "tap", selector: { text: "Add to cart" } } }]);
   });
 
   it("keeps coordinates when the selector would retarget to another element", async () => {
@@ -116,7 +116,7 @@ describe("flow-add-step tap selector capture", () => {
     const result = await recordTap({ x: 0.2, y: 0.52 });
 
     expect(result.message).toContain("resolves to a different element");
-    expect(await recordedSteps()).toEqual([{ kind: "tap", x: 0.2, y: 0.52 }]);
+    expect(await recordedSteps()).toEqual([{ step: { kind: "tap", x: 0.2, y: 0.52 } }]);
   });
 
   it("records the selector with a caveat when captured from the fallback tree source", async () => {
@@ -128,7 +128,7 @@ describe("flow-add-step tap selector capture", () => {
     const result = await recordTap({ x: 0.5, y: 0.52 });
 
     expect(result.message).toContain("fallback ax-service tree");
-    expect(await recordedSteps()).toEqual([{ kind: "tap", selector: { text: "Settings" } }]);
+    expect(await recordedSteps()).toEqual([{ step: { kind: "tap", selector: { text: "Settings" } } }]);
   });
 
   it("keeps coordinates with a warning when the tree fetch fails", async () => {
@@ -139,6 +139,6 @@ describe("flow-add-step tap selector capture", () => {
     const result = await recordTap({ x: 0.5, y: 0.52 });
 
     expect(result.message).toContain("selector capture failed");
-    expect(await recordedSteps()).toEqual([{ kind: "tap", x: 0.5, y: 0.52 }]);
+    expect(await recordedSteps()).toEqual([{ step: { kind: "tap", x: 0.5, y: 0.52 } }]);
   });
 });

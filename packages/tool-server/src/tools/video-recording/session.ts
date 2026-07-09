@@ -39,11 +39,20 @@ export function deleteSession(udid: string): RecordingSession | undefined {
   return session;
 }
 
-/** Kill all active recordings — called on process exit to avoid orphaned processes. */
+/**
+ * Kill all active recordings — called on process exit to avoid orphaned processes.
+ *
+ * Sends SIGINT (not SIGTERM) so simctl finalizes the MP4 moov atom. Without
+ * SIGINT the file is unplayable — it has video data but no index/metadata.
+ * We can't wait for the process to fully exit here (process.on("exit") is
+ * synchronous), so the finalize may not complete before the process dies.
+ * That's acceptable for a shutdown path — the explicit `stop-video-recording`
+ * tool path (which does wait) is the one that matters for usable artifacts.
+ */
 export function killAllSessions(): void {
   for (const [udid, session] of sessions) {
     try {
-      session.process.kill("SIGTERM");
+      session.process.kill("SIGINT");
     } catch {
       // Process may have already exited — ignore.
     }

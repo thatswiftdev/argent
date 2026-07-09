@@ -251,10 +251,23 @@ export type FlowStep =
   | { kind: "scroll-to"; target: FlowSelector; direction: ScrollDirection; within?: FlowSelector }
   | { kind: "snapshot"; name: string; maxMismatch?: number };
 
+/**
+ * A step plus its `optional` flag. When `optional` is true, a failure or error
+ * outcome is reported as `skip` instead of hard-stopping the flow — the run
+ * continues to the next step. This is the mechanism for conditional UI: an
+ * `optional` `await`/`tap` on a login screen or permission dialog that may or
+ * may not appear. `launch` steps ignore `optional` (a failed launch always
+ * stops the flow — there is no point running steps against an unlaunched app).
+ */
+export interface FlowStepWithOptional {
+  step: FlowStep;
+  optional?: boolean;
+}
+
 export type FlowFile = {
   /** Fragments only: documented entry-state contract. "" when unset. */
   executionPrerequisite: string;
-  steps: FlowStep[];
+  steps: FlowStepWithOptional[];
 };
 
 /**
@@ -265,8 +278,8 @@ export type FlowFile = {
  * Everything else is a fragment.
  */
 export function isE2eFlow(flow: FlowFile): boolean {
-  const first = flow.steps.find((s) => s.kind !== "echo");
-  return first?.kind === "launch";
+  const first = flow.steps.find((s) => s.step.kind !== "echo");
+  return first?.step.kind === "launch";
 }
 
 /**
@@ -333,7 +346,9 @@ type YamlScrollBody =
   | YamlSelector
   | { target: YamlSelector; direction?: ScrollDirection; within?: YamlSelector };
 
-type YamlStep =
+type YamlStep = {
+  optional?: boolean;
+} & (
   | { echo: string }
   | { launch: Launch }
   | { run: string }
@@ -344,7 +359,8 @@ type YamlStep =
   | { assert: YamlWaitBody }
   | { wait: number }
   | { "scroll-to": YamlScrollBody }
-  | { snapshot: string | { name: string; maxMismatch?: number } };
+  | { snapshot: string | { name: string; maxMismatch?: number } }
+);
 
 type YamlFlowFile = {
   executionPrerequisite?: string;
@@ -408,19 +424,25 @@ function waitToYaml(
   return body;
 }
 
-function toYamlStep(step: FlowStep): YamlStep {
+function toYamlStep(entry: FlowStepWithOptional): YamlStep {
+  const step = entry.step;
+  let y: YamlStep;
   switch (step.kind) {
     case "echo":
-      return { echo: step.message };
+      y = { echo: step.message };
+      break;
     case "launch":
-      return { launch: step.app };
+      y = { launch: step.app };
+      break;
     case "run":
-      return { run: step.flow };
+      y = { run: step.flow };
+      break;
     case "tap": {
       const body: TapBody = step.selector
         ? selectorToYaml(step.selector)
         : { x: step.x!, y: step.y! };
-      return { tap: body };
+      y = { tap: body };
+      break;
     }
     case "type": {
       const body: { into: YamlSelector; text: string; submit?: boolean } = {
@@ -429,10 +451,11 @@ function toYamlStep(step: FlowStep): YamlStep {
       };
       // `submit` defaults to true; only serialize the explicit opt-out.
       if (step.submit === false) body.submit = false;
-      return { type: body };
+      y = { type: body };
+      break;
     }
     case "await":
-      return {
+      y = {
         await: waitToYaml(
           step.condition,
           step.selector,
@@ -441,8 +464,9 @@ function toYamlStep(step: FlowStep): YamlStep {
           step.timeout
         ),
       };
+      break;
     case "assert":
-      return {
+      y = {
         assert: waitToYaml(
           step.condition,
           step.selector,
@@ -451,37 +475,45 @@ function toYamlStep(step: FlowStep): YamlStep {
           undefined
         ),
       };
+      break;
     case "wait":
-      return { wait: step.ms };
+      y = { wait: step.ms };
+      break;
     case "scroll-to": {
       const target = selectorToYaml(step.target);
       // Sugar the common case back to a bare target: default direction, no container.
       if (typeof target === "string" && step.direction === "down" && !step.within) {
-        return { "scroll-to": target };
+        y = { "scroll-to": target };
+      } else {
+        y = {
+          "scroll-to": {
+            target,
+            direction: step.direction,
+            ...(step.within ? { within: selectorToYaml(step.within) } : {}),
+          },
+        };
       }
-      return {
-        "scroll-to": {
-          target,
-          direction: step.direction,
-          ...(step.within ? { within: selectorToYaml(step.within) } : {}),
-        },
-      };
+      break;
     }
     case "snapshot":
       // A name-only snapshot sugars to a bare string.
-      return step.maxMismatch === undefined
+      y = step.maxMismatch === undefined
         ? { snapshot: step.name }
         : { snapshot: { name: step.name, maxMismatch: step.maxMismatch } };
+      break;
     case "tool":
     default: {
-      const y: { tool: string; args?: Record<string, unknown>; delayMs?: number } = {
+      const yt: { tool: string; args?: Record<string, unknown>; delayMs?: number } = {
         tool: step.name,
       };
-      if (Object.keys(step.args).length > 0) y.args = step.args;
-      if (step.delayMs !== undefined) y.delayMs = step.delayMs;
-      return y;
+      if (Object.keys(step.args).length > 0) yt.args = step.args;
+      if (step.delayMs !== undefined) yt.delayMs = step.delayMs;
+      y = yt;
+      break;
     }
   }
+  if (entry.optional) y.optional = true;
+  return y;
 }
 
 function badEntry(raw: unknown, detail: string): never {
@@ -830,7 +862,11 @@ export function parseFlow(content: string): FlowFile {
   }
 
   const steps = parsed.steps.map((raw) => {
-    if (raw !== null && typeof raw === "object") return fromYamlStep(raw as YamlStep);
+    if (raw !== null && typeof raw === "object") {
+      const optional = Boolean((raw as YamlStep).optional);
+      const step = fromYamlStep(raw as YamlStep);
+      return { step, optional: optional || undefined } satisfies FlowStepWithOptional;
+    }
     return badEntry(raw, "step must be an object");
   });
 
@@ -848,7 +884,7 @@ export function parseFlow(content: string): FlowFile {
 export async function appendStep(filePath: string, step: FlowStep): Promise<string> {
   const content = await fs.readFile(filePath, "utf8");
   const flow = parseFlow(content);
-  flow.steps.push(step);
+  flow.steps.push({ step });
   // Re-validate with the new step: a leading `launch` recorded into a
   // prerequisite-bearing recording must error here (nothing written), not
   // produce a file that fails to parse at replay.
@@ -886,7 +922,7 @@ export async function appendStepToActiveFlow(
     session.flow = parseFlow(flowFile);
     return { flowFile, savedTo: session.filePath, session };
   }
-  session.flow.steps.push(step);
+  session.flow.steps.push({ step });
   try {
     validateFlow(session.flow);
   } catch (err) {

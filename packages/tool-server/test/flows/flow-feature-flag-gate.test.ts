@@ -58,7 +58,7 @@ async function writeFlow(name: string): Promise<void> {
     path.join(dir, `${name}.yaml`),
     serializeFlow({
       executionPrerequisite: "",
-      steps: [{ kind: "tool", name: "propose_variant", args: {} }],
+      steps: [{ step: { kind: "tool", name: "propose_variant", args: {} } }],
     })
   );
 }

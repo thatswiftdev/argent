@@ -40,6 +40,7 @@ interface RawViewNode {
   className?: string;
   identifier?: string;
   label?: string;
+  value?: string;
   frame?: RawRect;
   windowFrame?: RawRect;
   hidden?: boolean;
@@ -87,6 +88,7 @@ function asViewNode(v: unknown): RawViewNode | null {
     className: nonEmptyString(r.className),
     identifier: nonEmptyString(r.identifier),
     label: nonEmptyString(r.label),
+    value: nonEmptyString(r.value),
     frame: asRect(r.frame),
     windowFrame: asRect(r.windowFrame),
     hidden: typeof r.hidden === "boolean" ? r.hidden : undefined,
@@ -144,7 +146,7 @@ function projectIosNode(
 
   let leaf: DescribeNode | null = null;
   let frame: DescribeFrame | null = null;
-  if (!skip && (node.identifier || node.label || node.firstResponder)) {
+  if (!skip && (node.identifier || node.label || node.value || node.firstResponder)) {
     const rect = node.windowFrame ?? node.frame;
     frame = rect ? normalizeFrame(rect, screenW, screenH) : null;
     if (frame) {
@@ -153,6 +155,7 @@ function projectIosNode(
         frame,
         children: [],
         label: node.label,
+        value: node.value,
         identifier: node.identifier,
         focused: node.firstResponder || undefined,
       };
@@ -166,7 +169,7 @@ function projectIosNode(
     // scrolled off or zero-area) — otherwise a text assert against an ancestor
     // would pass on content the screen doesn't show. Every labelled node is
     // leaf-eligible, so `frame` was computed for any node with text.
-    ownText: frame ? (node.label ?? "") : "",
+    ownText: frame ? (node.label ?? node.value ?? "") : "",
     leaf,
     shield: Boolean(node.identifier),
   };
@@ -220,6 +223,7 @@ const FULL_HIERARCHY_FIELDS = [
   "className",
   "identifier",
   "label",
+  "value",
   "frame",
   "windowFrame",
   "hidden",
@@ -238,7 +242,8 @@ const FULL_HIERARCHY_FIELDS = [
  */
 export async function queryFullHierarchyTree(
   registry: Registry,
-  device: DeviceInfo
+  device: DeviceInfo,
+  bundleIdHint?: string
 ): Promise<DescribeTreeData> {
   let nativeApi: NativeDevtoolsApi;
   try {
@@ -250,9 +255,13 @@ export async function queryFullHierarchyTree(
       { cause: err }
     );
   }
-  // resolveNativeTargetApp's own errors (no connected app / ambiguous frontmost)
-  // already carry the actionable next step, so they propagate unwrapped.
-  const target = await resolveNativeTargetApp(nativeApi, undefined);
+  // Use the explicit bundleId from the launch step when available — auto-resolve
+  // fails when multiple apps are connected (com.apple.Spotlight, WidgetRenderer).
+  // Fall back to auto-resolve for fragment flows that never set a bundleId.
+  const target = await resolveNativeTargetApp(
+    nativeApi,
+    bundleIdHint ?? undefined
+  );
 
   if (await nativeApi.requiresAppRestart(target.bundleId)) {
     throw new Error(

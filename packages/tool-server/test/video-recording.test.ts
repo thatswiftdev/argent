@@ -56,7 +56,12 @@ async function createTempVideo(): Promise<string> {
   const dir = path.join(os.tmpdir(), "argent-recordings-test");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `test-${process.hrtime.bigint()}.mp4`);
-  await fs.writeFile(file, Buffer.from("fake mp4 data"));
+  // Write a fake MP4 with a moov atom so the finalize validator passes.
+  await fs.writeFile(file, Buffer.concat([
+    Buffer.from("ftypisom\x00\x00\x02\x00isomiso2"),
+    Buffer.from("\x00\x00\x00\x08moov"),
+    Buffer.from("mdat-fake-video-data"),
+  ]));
   return file;
 }
 

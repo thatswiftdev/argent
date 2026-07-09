@@ -76,7 +76,7 @@ describe("fetchFlowTree without a full-hierarchy source", () => {
       path.join(dir, "check.yaml"),
       serializeFlow({
         executionPrerequisite: "",
-        steps: [{ kind: "assert", condition: "visible", selector: { text: "Continue" } }],
+        steps: [{ step: { kind: "assert", condition: "visible", selector: { text: "Continue" } } }],
       }),
       "utf8"
     );

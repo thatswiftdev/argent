@@ -87,7 +87,7 @@ describe("loose (bare-string) selector resolution", () => {
     await writeFlow("idtap", {
       executionPrerequisite: "",
       // `tap: tap-box` ⇒ loose; identifier-first finds the testID node.
-      steps: [{ kind: "tap", selector: { text: "tap-box", loose: true } }],
+      steps: [{ step: { kind: "tap", selector: { text: "tap-box", loose: true } } }],
     });
 
     const result = (await run("idtap")) as FlowRunResult & { taps: TapCall[] };
@@ -102,7 +102,7 @@ describe("loose (bare-string) selector resolution", () => {
 
     await writeFlow("texttap", {
       executionPrerequisite: "",
-      steps: [{ kind: "tap", selector: { text: "Login", loose: true } }],
+      steps: [{ step: { kind: "tap", selector: { text: "Login", loose: true } } }],
     });
 
     const result = (await run("texttap")) as FlowRunResult & { taps: TapCall[] };
@@ -121,7 +121,7 @@ describe("loose (bare-string) selector resolution", () => {
 
     await writeFlow("prefer", {
       executionPrerequisite: "",
-      steps: [{ kind: "tap", selector: { text: "save", loose: true } }],
+      steps: [{ step: { kind: "tap", selector: { text: "save", loose: true } } }],
     });
 
     const result = (await run("prefer")) as FlowRunResult & { taps: TapCall[] };
@@ -141,7 +141,7 @@ describe("loose (bare-string) selector resolution", () => {
     // strictness — the text locator must NOT fall back to the testID.
     await writeFlow("strict", {
       executionPrerequisite: "",
-      steps: [{ kind: "tap", selector: { text: "tap-box" } }],
+      steps: [{ step: { kind: "tap", selector: { text: "tap-box" } } }],
     });
 
     const result = (await run("strict")) as FlowRunResult & { taps: TapCall[] };
@@ -157,7 +157,7 @@ describe("loose (bare-string) selector resolution", () => {
     await writeFlow("idawait", {
       executionPrerequisite: "",
       // `await: { visible: tap-box }` ⇒ loose; identifier-first finds the testID.
-      steps: [{ kind: "await", condition: "visible", selector: { text: "tap-box", loose: true } }],
+      steps: [{ step: { kind: "await", condition: "visible", selector: { text: "tap-box", loose: true } } }],
     });
 
     const result = await run("idawait");
@@ -179,7 +179,7 @@ describe("loose (bare-string) selector resolution", () => {
 
     await writeFlow("zeroawait", {
       executionPrerequisite: "",
-      steps: [{ kind: "await", condition: "visible", selector: { text: "Checkout", loose: true } }],
+      steps: [{ step: { kind: "await", condition: "visible", selector: { text: "Checkout", loose: true } } }],
     });
 
     const result = await run("zeroawait");
@@ -198,7 +198,7 @@ describe("loose (bare-string) selector resolution", () => {
 
     await writeFlow("zerohidden", {
       executionPrerequisite: "",
-      steps: [{ kind: "assert", condition: "hidden", selector: { text: "Checkout", loose: true } }],
+      steps: [{ step: { kind: "assert", condition: "hidden", selector: { text: "Checkout", loose: true } } }],
     });
 
     const result = await run("zerohidden");
@@ -214,7 +214,7 @@ describe("loose (bare-string) selector resolution", () => {
 
     await writeFlow("zeroexists", {
       executionPrerequisite: "",
-      steps: [{ kind: "assert", condition: "exists", selector: { text: "Checkout", loose: true } }],
+      steps: [{ step: { kind: "assert", condition: "exists", selector: { text: "Checkout", loose: true } } }],
     });
 
     const result = await run("zeroexists");
@@ -234,13 +234,13 @@ describe("loose (bare-string) selector resolution", () => {
     await writeFlow("idassert", {
       executionPrerequisite: "",
       steps: [
-        {
+        { step: {
           kind: "assert",
           condition: "text",
           selector: { text: "counter", loose: true },
           expectedText: "Taps: 3",
           textMatch: "equals",
-        },
+        } },
       ],
     });
 
