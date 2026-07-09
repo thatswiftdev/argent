@@ -34,7 +34,11 @@ export function makeIosImpl(
       const blocked = await precheckNativeDevtools(nativeDevtools, params.udid);
       if (blocked) return blocked;
       try {
-        await execFileAsync("xcrun", ["simctl", "launch", params.udid, params.bundleId]);
+        const launchCmd = ["simctl", "launch", params.udid, params.bundleId];
+        if (params.launchArgs && params.launchArgs.length > 0) {
+          launchCmd.push("--", ...params.launchArgs);
+        }
+        await execFileAsync("xcrun", launchCmd);
       } catch (err) {
         throw new FailureError(
           `Failed to launch iOS app ${params.bundleId} on ${params.udid}.`,

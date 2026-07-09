@@ -8,6 +8,8 @@ export interface LaunchAppParams {
   bundleId: string;
   /** Android-only: ignored on iOS. */
   activity?: string;
+  /** iOS-only: launch arguments passed via `simctl launch -- <args>`. */
+  launchArgs?: string[];
 }
 
 export type LaunchAppResult =

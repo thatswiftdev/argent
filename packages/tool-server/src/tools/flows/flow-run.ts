@@ -321,6 +321,9 @@ async function runLaunch(state: ExecState, app: Launch): Promise<{ ok: boolean; 
     };
   }
 
+  // Extract launchArgs from the Launch object (iOS-only, for mock preconditions).
+  const launchArgs = typeof app === "object" ? app.launchArgs : undefined;
+
   // Retry restart-app + native devtools connection. A cold start on a large app
   // may not expose the injected dylib's connection within a single window — the
   // dylib attaches asynchronously, and a second launch after a clean terminate
@@ -330,7 +333,9 @@ async function runLaunch(state: ExecState, app: Launch): Promise<{ ok: boolean; 
   for (let attempt = 0; attempt <= LAUNCH_MAX_RETRIES; attempt++) {
     if (signal?.aborted) return { ok: false, reason: "run aborted during launch" };
     try {
-      await invokeOnDevice(state, "restart-app", { bundleId });
+      const restartArgs: Record<string, unknown> = { bundleId };
+      if (launchArgs && launchArgs.length > 0) restartArgs.launchArgs = launchArgs;
+      await invokeOnDevice(state, "restart-app", restartArgs);
     } catch (err) {
       lastReason = `restart-app failed: ${errMsg(err)}`;
       continue;

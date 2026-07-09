@@ -41,6 +41,15 @@ const zodSchema = z.object({
     .describe(
       "Android-only: fully-qualified Activity name (e.g. `.MainActivity` or `com.example/com.example.MainActivity`). If omitted on Android, the app's default launcher activity is used. Ignored on iOS / Chromium."
     ),
+  launchArgs: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "iOS-only: launch arguments passed to the app via `simctl launch -- <args>`. " +
+      "Read with ProcessInfo.processInfo.arguments in AppDelegate/SceneDelegate. " +
+      "Use for mock preconditions: ['-mock-auth-state', 'logged-in', '-mock-orders', '3']. " +
+      "Ignored on Android / Chromium."
+    ),
 });
 
 type Params = z.infer<typeof zodSchema>;

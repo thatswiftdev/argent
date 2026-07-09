@@ -7,6 +7,8 @@ export interface RestartAppParams {
   udid: string;
   bundleId: string;
   activity?: string;
+  /** iOS-only: launch arguments passed via `simctl launch -- <args>`. */
+  launchArgs?: string[];
 }
 
 export type RestartAppResult =

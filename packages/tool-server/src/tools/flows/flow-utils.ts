@@ -206,6 +206,12 @@ export type Launch =
       android?: string;
       vega?: string;
       chromium?: ChromiumLaunch;
+      /**
+       * iOS-only launch arguments passed via `simctl launch -- <args>`. Read with
+       * ProcessInfo.processInfo.arguments in AppDelegate. Use for mock
+       * preconditions: ['-mock-auth-state', 'logged-in'].
+       */
+      launchArgs?: string[];
     };
 
 /** Axis + sense a `scroll-to` step scrolls in to reveal its target. */
