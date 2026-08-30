@@ -25,6 +25,7 @@ import { createRestartAppTool } from "../tools/restart-app";
 import { reinstallAppTool } from "../tools/reinstall-app";
 import { openUrlTool } from "../tools/open-url";
 import { createScreenshotTool } from "../tools/screenshot";
+import { createSimulatorStreamTool } from "../tools/simulator-stream";
 import { gestureTapTool } from "../tools/gesture-tap";
 import { gestureSwipeTool } from "../tools/gesture-swipe";
 import { gestureScrollTool } from "../tools/gesture-scroll";
@@ -115,6 +116,7 @@ export function createRegistry(): Registry {
   registry.registerTool(reinstallAppTool);
   registry.registerTool(openUrlTool);
   registry.registerTool(createScreenshotTool(registry));
+  registry.registerTool(createSimulatorStreamTool(registry));
   registry.registerTool(screenshotDiffTool);
   registry.registerTool(createStartVideoRecordingTool(registry));
   registry.registerTool(createStopVideoRecordingTool(registry));
