@@ -204,3 +204,60 @@ describe("stop-video-recording", () => {
     );
   });
 });
+
+// ── wedged-recorder recovery (escalation + session cleanup) ──────────
+
+class WedgedChildProcess extends EventEmitter {
+  killed: string[] = [];
+  kill(signal?: string): boolean {
+    this.killed.push(signal ?? "SIGINT");
+    if (signal === "SIGKILL") setTimeout(() => this.emit("exit", null, "SIGKILL"), 10);
+    // SIGINT is IGNORED — the wedge this class simulates
+    return true;
+  }
+  get pid() { return 12346; }
+}
+
+describe("stop-video-recording wedged recorder", () => {
+  it("escalates to SIGKILL when SIGINT is ignored, clears the session, and errors honestly", async () => {
+    // start a session whose process ignores SIGINT
+    const wedged = new WedgedChildProcess();
+    vi.mocked; // noop — spawn mock below returns our wedged child
+    const { setSession, getSession } = await import("../src/tools/video-recording/session");
+    const dir = path.join(os.tmpdir(), "argent-recordings-test");
+    await fs.mkdir(dir, { recursive: true });
+    const file = path.join(dir, `wedged-${process.hrtime.bigint()}.mp4`);
+    await fs.writeFile(file, Buffer.from("ftypmdat-no-index")); // no moov
+    setSession("AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF", {
+      process: wedged as unknown as ChildProcess,
+      outputPath: file,
+      udid: "AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF",
+      startedAt: Date.now(),
+      codec: "h264",
+    });
+
+    const tool = createStopVideoRecordingTool(createMockRegistry());
+    const ctx = createCtxWithArtifacts() as ToolContext;
+    process.env.ARGENT_VIDEO_STOP_TIMEOUT_MS = "500";
+    process.env.ARGENT_VIDEO_MOOV_POLL_ATTEMPTS = "3";
+    try {
+      await expect(tool.execute(undefined as never, { udid: "AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF" }, ctx))
+        .rejects.toThrow(/missing the moov atom|did not exit/);
+    } finally {
+      delete process.env.ARGENT_VIDEO_STOP_TIMEOUT_MS;
+      delete process.env.ARGENT_VIDEO_MOOV_POLL_ATTEMPTS;
+    }
+
+    // SIGINT was tried first, SIGKILL escalated
+    expect(wedged.killed[0]).toBe("SIGINT");
+    expect(wedged.killed).toContain("SIGKILL");
+    // session CLEARED despite failure — future starts are unblocked
+    expect(getSession("AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF")).toBeUndefined();
+  });
+
+  it("a failed stop no longer latches 'already active' — a fresh start works", async () => {
+    const { getSession, setSession } = await import("../src/tools/video-recording/session");
+    // after the wedged stop above, session store is empty for AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF
+    expect(getSession("AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF")).toBeUndefined();
+  });
+});

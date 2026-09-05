@@ -71,22 +71,37 @@ async function hasMoovAtom(filePath: string): Promise<boolean> {
 async function waitForExitAndFinalize(
   process: ChildProcess,
   outputPath: string,
-  timeoutMs = 15_000
+  timeoutMs = Number(globalThis.process?.env?.ARGENT_VIDEO_STOP_TIMEOUT_MS ?? 15_000)
 ): Promise<{ sizeBytes: number }> {
   const { stat } = await import("node:fs/promises");
 
   return new Promise((resolve, reject) => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
     const timer = setTimeout(() => {
-      reject(new Error(`Recording process did not exit within ${timeoutMs}ms`));
+      // simctl ignored SIGINT (wedged). Escalate to SIGKILL so the process
+      // can NEVER linger and the exit handler below always runs — the file
+      // will lack the moov atom, but the recording is recoverable, unlike a
+      // hung process that blocks every future start on the device.
+      try { process.kill("SIGKILL"); } catch { /* already gone */ }
+      const killTimer = setTimeout(() => {
+        // even SIGKILL produced no exit event (unreapable zombie) — resolve
+        // the waiter anyway; the moov check below reports the damage
+        process.emit("exit" as never, null as never, "SIGKILL" as never);
+      }, 2_000);
+      timers.push(killTimer);
     }, timeoutMs);
+    timers.push(timer);
+    const clearTimers = () => timers.forEach(clearTimeout);
 
     process.on("exit", async () => {
+      clearTimers();
       clearTimeout(timer);
 
       // Poll for the moov atom — the file isn't playable without it. simctl
       // writes it as its final step, so we check the tail of the file. Up to
       // 50 attempts × 100ms = 5s of polling after process exit.
-      for (let i = 0; i < 50; i++) {
+      const moovAttempts = Number(globalThis.process?.env?.ARGENT_VIDEO_MOOV_POLL_ATTEMPTS ?? 50);
+      for (let i = 0; i < moovAttempts; i++) {
         if (await hasMoovAtom(outputPath)) {
           const finalStat = await stat(outputPath).catch(() => ({ size: 0 }));
           resolve({ sizeBytes: finalStat.size });
@@ -141,12 +156,19 @@ Fails if no recording is active on the device, if the file cannot be finalized w
       }
 
       // Kill the process and wait for the file to finalize (moov atom verified).
-      const { sizeBytes } = await waitForExitAndFinalize(
-        session.process,
-        session.outputPath
-      );
-
-      // Remove from the session store.
+      // The session is deleted on EVERY path — a failure here must NOT latch
+      // "recording active" on the device (that flag once blocked all future
+      // recordings across engine restarts; the error below explains instead).
+      let finalize: { sizeBytes: number };
+      try {
+        finalize = await waitForExitAndFinalize(session.process, session.outputPath);
+      } catch (err) {
+        deleteSession(udid);
+        throw new Error(
+          `${err instanceof Error ? err.message : String(err)} — the stale session was cleared; retry start-video-recording.`
+        );
+      }
+      const { sizeBytes } = finalize;
       deleteSession(udid);
 
       // Register the MP4 as an artifact.
